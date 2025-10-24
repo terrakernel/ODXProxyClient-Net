@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>ODXProxy.Client</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Julian Wajong</Authors>
+    <Company>TERRAKERNEL PTE. LTD.</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>A .NET client library for the ODXProxy Gateway to interact with Odoo instances.</Description>
+    <PackageTags>odoo;odx;proxy;client</PackageTags>
+
+    <PackageProjectUrl>https://github.com/your-org/ODXProxyClient-Net</PackageProjectUrl>
+    
+    <!-- gitrepos -->
+    <RepositoryUrl>https://github.com/your-org/ODXProxyClient-Net.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- include README.md -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    
+    <!-- docs -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- allow debug -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- C# implementation of ULID -->
+    <PackageReference Include="Ulid" Version="1.3.3" />
+  </ItemGroup>
+
+</Project>

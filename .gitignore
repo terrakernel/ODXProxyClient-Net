@@ -1,0 +1,59 @@
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# IDE-specific folders
+.vs/
+.idea/
+.vscode/
+
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# Build artifacts
+[Rr]elease/
+[Dd]ebug/
+[Nn]et[Ss]tandard*/
+[Nn]et[Cc]ore[Aa]pp*/
+[Nn]et*/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+*.symbols.nupkg
+
+# NuGet package folder (older projects)
+[Pp]ackages/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+
+# OS-generated files
+# Mac
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+ehthumbs_vista.db
+
+# Windows
+Thumbs.db
+
+# Secrets and local configuration files
+# Never commit sensitive data. Use user secrets or environment variables.
+secrets.json
+appsettings.Development.json
+
+# Log files and temporary files
+*.log
+*.tmp
+*.temp
+
+# Roslyn code analysis files
+*.ruleset
