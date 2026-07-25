@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Error-taxonomy test: deliberately triggers each failure path against a LIVE
+    odxproxy + Odoo and asserts the client surfaces the CORRECT typed exception
+    (OdxAuthException, OdxBadRequestException, OdxUpstreamConnectException,
+    OdxOdooException, OdxTransportException, ...). Read-only / non-mutating: every
+    scenario fails before any data is written. Reuses the same gitignored config as
+    Odx.Client.RealTest (default: ../Odx.Client.RealTest/realtest.local.json).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Odx.Client.ErrorTest</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Odx.Client\Odx.Client.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the native cdylib next to the exe so P/Invoke resolves it. -->
+  <ItemGroup>
+    <None Include="..\..\target\x86_64-pc-windows-msvc\release\odxclient.dll"
+          Link="odxclient.dll"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
