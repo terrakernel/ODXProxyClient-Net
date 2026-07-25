@@ -4,6 +4,8 @@
 # .NET build output
 [Bb]in/
 [Oo]bj/
+# ...but keep Rust bin/ sources (the [Bb]in/ rule above would otherwise hide src/bin/).
+!/src/bin/
 
 # Claude local (machine-specific permissions/settings)
 .claude/settings.local.json
