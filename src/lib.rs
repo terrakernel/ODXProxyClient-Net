@@ -243,7 +243,7 @@ mod tests {
                 req.as_ptr(),
                 req.len(),
                 0,
-                Some(capture_cb),
+                capture_cb,
                 Arc::as_ptr(&signal) as *mut c_void,
                 &mut handle,
             )
@@ -321,7 +321,7 @@ mod tests {
                 req.as_ptr(),
                 req.len(),
                 0,
-                Some(capture_cb),
+                capture_cb,
                 Arc::as_ptr(&signal) as *mut c_void,
                 &mut handle,
             )
@@ -382,7 +382,7 @@ mod tests {
                 req.as_ptr(),
                 req.len(),
                 0,
-                Some(capture_cb),
+                capture_cb,
                 std::ptr::null_mut(),
                 &mut handle,
             )
@@ -461,7 +461,7 @@ mod tests {
         let st = unsafe {
             odx_get_about(
                 client,
-                Some(capture_cb),
+                capture_cb,
                 Arc::as_ptr(&signal) as *mut c_void,
                 &mut handle,
             )
@@ -497,7 +497,7 @@ mod tests {
                 body.as_ptr(),
                 body.len(),
                 0,
-                Some(capture_cb),
+                capture_cb,
                 Arc::as_ptr(&signal) as *mut c_void,
                 &mut handle,
             )

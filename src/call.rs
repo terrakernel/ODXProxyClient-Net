@@ -45,9 +45,10 @@ pub struct OdxBuffer {
     bytes: Bytes,
 }
 
-/// Completion callback. Invoked exactly once per submitted request, from a tokio
-/// worker thread. `data_ptr`/`owner` are null on transport failure or cancel. The
-/// callee takes ownership of `owner` and must free it with `odx_buffer_free`.
+/// Completion callback. Must be non-null. Invoked exactly once per submitted
+/// request, from a tokio worker thread. `data_ptr`/`owner` are null on transport
+/// failure or cancel. The callee takes ownership of `owner` and must free it with
+/// `odx_buffer_free`.
 pub type OdxCallback = unsafe extern "C" fn(
     user_data: *mut c_void,
     status: OdxStatus,
@@ -80,7 +81,7 @@ pub unsafe extern "C" fn odx_execute(
     body_ptr: *const u8,
     body_len: usize,
     timeout_secs: u32,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
 ) -> OdxStatus {
@@ -106,7 +107,7 @@ pub unsafe extern "C" fn odx_get_version(
     body_ptr: *const u8,
     body_len: usize,
     timeout_secs: u32,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
 ) -> OdxStatus {
@@ -129,7 +130,7 @@ pub unsafe extern "C" fn odx_get_version(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn odx_get_license(
     client: *mut ClientInner,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
 ) -> OdxStatus {
@@ -142,7 +143,7 @@ pub unsafe extern "C" fn odx_get_license(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn odx_get_about(
     client: *mut ClientInner,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
 ) -> OdxStatus {
@@ -155,7 +156,7 @@ pub unsafe extern "C" fn odx_get_about(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn odx_get_metrics(
     client: *mut ClientInner,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
 ) -> OdxStatus {
@@ -219,7 +220,7 @@ unsafe fn submit_with_body(
     body_ptr: *const u8,
     body_len: usize,
     timeout_secs: u32,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
     path: &str,
@@ -230,10 +231,6 @@ unsafe fn submit_with_body(
     if client.is_null() {
         return OdxStatus::InvalidHandle;
     }
-    let callback = match callback {
-        Some(cb) => cb,
-        None => return OdxStatus::InvalidArgument,
-    };
     if body_ptr.is_null() || body_len == 0 {
         return OdxStatus::InvalidArgument;
     }
@@ -259,7 +256,7 @@ unsafe fn submit_with_body(
 /// `client`/`out_request` must be valid or null.
 unsafe fn submit_get(
     client: *mut ClientInner,
-    callback: Option<OdxCallback>,
+    callback: OdxCallback,
     user_data: *mut c_void,
     out_request: *mut *mut OdxRequest,
     path: &str,
@@ -270,10 +267,6 @@ unsafe fn submit_get(
     if client.is_null() {
         return OdxStatus::InvalidHandle;
     }
-    let callback = match callback {
-        Some(cb) => cb,
-        None => return OdxStatus::InvalidArgument,
-    };
     let inner = unsafe { &*client };
     // timeout_secs = 0 → spawn_request falls back to the client default.
     spawn_request(
