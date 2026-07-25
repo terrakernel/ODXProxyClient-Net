@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Real-instance smoke test: drives the .NET client against a LIVE odxproxy + Odoo.
+    Connection details come from a gitignored config file (default: realtest.local.json)
+    so live API keys never enter source control. Read-only calls only.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Odx.Client.RealTest</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Odx.Client\Odx.Client.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the native cdylib next to the exe so P/Invoke resolves it. -->
+  <ItemGroup>
+    <None Include="..\..\target\x86_64-pc-windows-msvc\release\odxclient.dll"
+          Link="odxclient.dll"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -8,6 +8,10 @@
 # Claude local (machine-specific permissions/settings)
 .claude/settings.local.json
 
+# Real-instance test config (contains live proxy/Odoo API keys)
+realtest.local.json
+*.local.json
+
 # Editor / OS
 .vs/
 .vscode/
