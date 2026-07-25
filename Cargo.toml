@@ -1,0 +1,25 @@
+[package]
+name = "odxclient"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Rust C-ABI core for the odxproxy .NET client (Windows, x86_64-pc-windows-msvc)."
+
+[lib]
+# cdylib -> odxclient.dll + odxclient.dll.lib (MSVC import lib). See IMPLEMENTATION-PLAN.md §9.
+crate-type = ["cdylib"]
+
+[dependencies]
+# Versions mirror the sibling `trustedtimeclient-rs` lockfile so we reuse the shared
+# registry cache (reqwest 0.13.3, tokio 1.52.3, bytes 1.10.1) — no fresh downloads.
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
+reqwest = { version = "0.13", features = ["rustls", "brotli", "deflate", "gzip", "http2"] }
+bytes = "1"
+# NOTE: no serde/serde_json — the core is a pure opaque-byte pipe (IMPLEMENTATION-PLAN.md §0).
+
+[profile.release]
+opt-level = 3          # perf > size (constraint #1)
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "unwind"       # REQUIRED: catch_unwind guards the FFI boundary (§6.3). Do NOT set "abort".

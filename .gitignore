@@ -1,0 +1,16 @@
+# Rust build output
+/target/
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+
+# Claude local (machine-specific permissions/settings)
+.claude/settings.local.json
+
+# Editor / OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
+.DS_Store

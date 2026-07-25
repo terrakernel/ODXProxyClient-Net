@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Odx.Client — managed binding for the odxclient Rust cdylib.
+    Two layers in one assembly: Interop (thin P/Invoke) + the typed convenience
+    surface. Framework-agnostic (no WinUI); Windows x64 only via the native DLL.
+    See IMPLEMENTATION-PLAN.md §7, §9.4.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Odx.Client</AssemblyName>
+    <RootNamespace>Odx.Client</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- AOT-friendly per spec constraint #7: enables the trim/AOT analyzers. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Interop is intentionally undocumented in XML; silence CS1591 for now. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

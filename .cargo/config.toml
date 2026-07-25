@@ -1,0 +1,4 @@
+# Build for the only supported target (constraint #5). Output lands under
+# target/x86_64-pc-windows-msvc/. See IMPLEMENTATION-PLAN.md §9.
+[build]
+target = "x86_64-pc-windows-msvc"
