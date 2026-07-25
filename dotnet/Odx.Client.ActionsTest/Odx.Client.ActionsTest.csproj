@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Full-action integration test: exercises ALL nine odxproxy execute actions against a
+    LIVE odxproxy + Odoo (search_count, search, read, fields_get, search_read, create,
+    write, unlink, call_method). Reads the same gitignored config as Odx.Client.RealTest
+    (default: ../Odx.Client.RealTest/realtest.local.json) so live keys stay out of git.
+
+    UNLIKE RealTest this performs WRITES (create/write/unlink) — but only on a throwaway
+    res.partner it creates itself, and it unlinks that record at the end (+ a finally
+    backstop). Intended for a DEV Odoo instance.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Odx.Client.ActionsTest</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Odx.Client\Odx.Client.csproj" />
+  </ItemGroup>
+
+  <!-- Copy the native cdylib next to the exe so P/Invoke resolves it. -->
+  <ItemGroup>
+    <None Include="..\..\target\x86_64-pc-windows-msvc\release\odxclient.dll"
+          Link="odxclient.dll"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
