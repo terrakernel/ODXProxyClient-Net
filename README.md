@@ -269,4 +269,4 @@ and NuGet packaging. See [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) for 
 
 ## License
 
-Copyright © TerraKernel. License TBD — add a `LICENSE` file before distributing.
+[MIT](LICENSE) © 2026 TerraKernel

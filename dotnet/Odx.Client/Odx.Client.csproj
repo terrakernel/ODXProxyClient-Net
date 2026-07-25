@@ -20,6 +20,12 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- Interop is intentionally undocumented in XML; silence CS1591 for now. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Package metadata (for a future nupkg). -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright (c) 2026 TerraKernel</Copyright>
+    <Authors>TerraKernel</Authors>
+    <RepositoryUrl>https://github.com/terrakernel/ODXProxyClient-Net</RepositoryUrl>
   </PropertyGroup>
 
 </Project>
