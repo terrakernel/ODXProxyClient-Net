@@ -23,7 +23,7 @@ You never call `Task.Run`, and you never need to know anything about threads. Ju
 
 ```csharp
 Partner[]? partners = await client.ExecuteAsync<Partner[]>(
-    "search_read", "res.partner", odoo, AppJson.Default.PartnerArray);
+    OdxAction.SearchRead, "res.partner", odoo, AppJson.Default.PartnerArray);
 ```
 
 ❌ **DON'T** — block on it. This freezes your UI:
@@ -105,9 +105,10 @@ var odoo = new OdooInstance
     ApiKey = "<odoo api key>",
 };
 
-// 4) Call. `params`/`keyword` are raw Odoo JSON — this client is a thin passthrough.
+// 4) Call. `action` is a compile-checked OdxAction; `params`/`keyword` are raw Odoo JSON
+//    (this client is a thin passthrough).
 Partner[]? partners = await client.ExecuteAsync(
-    action:      "search_read",
+    action:      OdxAction.SearchRead,
     modelId:     "res.partner",
     instance:    odoo,
     resultType:  AppJson.Default.PartnerArray,
@@ -123,7 +124,7 @@ private async void OnRefreshClick(object sender, RoutedEventArgs e)
     try
     {
         Partner[]? partners = await _client.ExecuteAsync<Partner[]>(
-            "search_read", "res.partner", _odoo, AppJson.Default.PartnerArray);
+            OdxAction.SearchRead, "res.partner", _odoo, AppJson.Default.PartnerArray);
         MyListView.ItemsSource = partners;   // back on the UI thread, ready to bind
     }
     catch (OdxException ex)
@@ -154,13 +155,13 @@ No `Task.Run`, no dispatcher marshalling — the network + parse already happene
 **Three call styles for `execute`/`version`:**
 
 ```csharp
-// (a) Structured + typed — recommended. Builds the request envelope for you and
-//     deserializes `result` into T.
+// (a) Structured + typed — recommended. `action` is a compile-checked OdxAction; builds
+//     the request envelope for you and deserializes `result` into T.
 Partner[]? a = await client.ExecuteAsync<Partner[]>(
-    "search_read", "res.partner", odoo, AppJson.Default.PartnerArray, paramsJson, keywordJson);
+    OdxAction.SearchRead, "res.partner", odoo, AppJson.Default.PartnerArray, paramsJson, keywordJson);
 
 // (b) Raw body + typed — you supply the full request JSON, we deserialize the result.
-byte[] body = OdxRequestBuilder.BuildExecute("search", "res.partner", odoo, paramsJson);
+byte[] body = OdxRequestBuilder.BuildExecute(OdxAction.Search, "res.partner", odoo, paramsJson);
 long[]? b = await client.ExecuteAsync<long[]>(body, AppJson.Default.Int64Array);
 
 // (c) Raw body + raw response — you own both sides (advanced).
@@ -170,6 +171,33 @@ OdxResponse c = await client.ExecuteAsync(body);
 
 The GET endpoints have a typed overload too (`GetAboutAsync<T>(AppJson.Default.AboutInfo)`) and a
 raw overload returning `OdxResponse`.
+
+### Actions — use the `OdxAction` enum
+
+The `execute` action is a **closed set** the proxy defines. Pass an `OdxAction` rather than a raw
+string so a typo is a **compile error**, not a runtime `-32001 invalid action` round-trip. The enum
+value maps to the exact wire string for you (as a UTF-8 constant — no allocation, no reflection):
+
+| `OdxAction` | wire string | | `OdxAction` | wire string |
+| --- | --- | --- | --- | --- |
+| `SearchCount` | `search_count` | | `Create` | `create` |
+| `Search` | `search` | | `Write` | `write` |
+| `Read` | `read` | | `Unlink` | `unlink` |
+| `FieldsGet` | `fields_get` | | `CallMethod` | `call_method` |
+| `SearchRead` | `search_read` | | | |
+
+`OdxAction.CallMethod` requires an `fnName` — the client throws `ArgumentException` up front if you
+omit it (the proxy would otherwise return `-32002`):
+
+```csharp
+var res = await client.ExecuteAsync<long>(
+    OdxAction.CallMethod, "res.partner", odoo, AppJson.Default.Int64,
+    paramsJson: """[[42]]"""u8.ToArray(), fnName: "action_archive");
+```
+
+> **Escape hatch:** every structured method and `OdxRequestBuilder.BuildExecute` also has a raw
+> `string` action overload, in case the proxy adds an action before this enum does. Prefer the
+> enum; reach for the string only when you must.
 
 > **Why `JsonTypeInfo<T>`?** The typed methods require a source-generated `JsonTypeInfo<T>` (from
 > your `JsonSerializerContext`) so the whole path stays reflection-free and AOT-safe. This is also
@@ -211,7 +239,7 @@ Failures throw a typed `OdxException`. Cancellation throws `OperationCanceledExc
 ```csharp
 try
 {
-    var ids = await client.ExecuteAsync<long[]>("unlink", "res.partner", odoo,
+    var ids = await client.ExecuteAsync<long[]>(OdxAction.Unlink, "res.partner", odoo,
         AppJson.Default.Int64Array, paramsJson: """[[999999]]"""u8.ToArray());
 }
 catch (OdxOdooException ex)      { /* Odoo said no: ex.OdooCode, ex.Message, ex.RpcData */ }
@@ -227,7 +255,7 @@ Pass a `CancellationToken`; cancelling aborts the in-flight request and surfaces
 ```csharp
 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 var res = await client.ExecuteAsync<Partner[]>(
-    "search_read", "res.partner", odoo, AppJson.Default.PartnerArray, cancellationToken: cts.Token);
+    OdxAction.SearchRead, "res.partner", odoo, AppJson.Default.PartnerArray, cancellationToken: cts.Token);
 ```
 
 ## Odoo wire helpers (opt-in)

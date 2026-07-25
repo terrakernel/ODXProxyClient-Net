@@ -136,7 +136,30 @@ public sealed class OdxClient : IDisposable
 
     /// <summary>
     /// POST <c>/api/odoo/execute</c>, assembling the request envelope from primitives.
-    /// <paramref name="paramsJson"/> is a raw JSON array; <paramref name="keywordJson"/>
+    /// The action is an <see cref="OdxAction"/> — validated at compile time, so a typo can't
+    /// reach the proxy as a <c>-32001</c>. <paramref name="paramsJson"/> is a raw JSON array;
+    /// <paramref name="keywordJson"/> a raw JSON object (both spliced in verbatim).
+    /// <paramref name="fnName"/> is required for <see cref="OdxAction.CallMethod"/>.
+    /// Deserializes <c>result</c> into <typeparamref name="T"/>.
+    /// </summary>
+    public Task<T?> ExecuteAsync<T>(
+        OdxAction action,
+        string modelId,
+        OdooInstance instance,
+        JsonTypeInfo<T> resultType,
+        ReadOnlyMemory<byte> paramsJson = default,
+        ReadOnlyMemory<byte> keywordJson = default,
+        string? fnName = null,
+        uint timeoutSecs = 0,
+        CancellationToken cancellationToken = default)
+        => SynchronizationContext.Current is null
+            ? ExecuteBuilt(action, modelId, instance, resultType, paramsJson, keywordJson, fnName, timeoutSecs, cancellationToken)
+            : Task.Run(() => ExecuteBuilt(action, modelId, instance, resultType, paramsJson, keywordJson, fnName, timeoutSecs, cancellationToken), cancellationToken);
+
+    /// <summary>
+    /// Raw-action-string overload of the structured <c>execute</c> call — the escape hatch
+    /// for actions not covered by <see cref="OdxAction"/>. Prefer the <see cref="OdxAction"/>
+    /// overload. <paramref name="paramsJson"/> is a raw JSON array; <paramref name="keywordJson"/>
     /// a raw JSON object (both spliced in verbatim). Deserializes <c>result</c> into
     /// <typeparamref name="T"/>.
     /// </summary>
@@ -159,6 +182,13 @@ public sealed class OdxClient : IDisposable
         => SynchronizationContext.Current is null
             ? GetVersionBuilt(odooUrl, resultType, timeoutSecs, cancellationToken)
             : Task.Run(() => GetVersionBuilt(odooUrl, resultType, timeoutSecs, cancellationToken), cancellationToken);
+
+    private Task<T?> ExecuteBuilt<T>(OdxAction action, string modelId, OdooInstance instance, JsonTypeInfo<T> resultType,
+        ReadOnlyMemory<byte> paramsJson, ReadOnlyMemory<byte> keywordJson, string? fnName, uint timeoutSecs, CancellationToken ct)
+    {
+        byte[] body = OdxRequestBuilder.BuildExecute(action, modelId, instance, paramsJson.Span, keywordJson.Span, fnName);
+        return ExecuteAsync(body.AsMemory(), resultType, timeoutSecs, ct);
+    }
 
     private Task<T?> ExecuteBuilt<T>(string action, string modelId, OdooInstance instance, JsonTypeInfo<T> resultType,
         ReadOnlyMemory<byte> paramsJson, ReadOnlyMemory<byte> keywordJson, string? fnName, uint timeoutSecs, CancellationToken ct)

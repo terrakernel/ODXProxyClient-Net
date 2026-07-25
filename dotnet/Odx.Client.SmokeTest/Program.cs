@@ -20,6 +20,7 @@ await RunAsync("HTTP 200 with error body throws OdxOdooException", OdooErrorOn20
 await RunAsync("GetAboutAsync<T> deserializes flat body", TypedAbout);
 RunSync("Many2One converter round-trips (read [id,name]/false, write bare id)", Many2OneRoundTrip);
 await RunAsync("ExecuteAsync (structured builder) writes a correct envelope", StructuredExecute);
+RunSync("OdxAction values serialize to their exact wire strings", OdxActionWireStrings);
 
 Console.WriteLine();
 if (failures == 0)
@@ -241,6 +242,45 @@ async Task StructuredExecute()
     Assert(body.Contains("\"api_key\":\"secret\"", StringComparison.Ordinal), "odoo_instance.api_key missing");
     Assert(body.Contains("is_company", StringComparison.Ordinal), "params fragment not spliced");
     Assert(body.Contains("\"limit\":80", StringComparison.Ordinal), "keyword fragment not spliced");
+}
+
+void OdxActionWireStrings()
+{
+    var instance = new OdooInstance { Url = "u", UserId = 1, Db = "d", ApiKey = "k" };
+    (OdxAction Action, string Wire)[] cases =
+    [
+        (OdxAction.SearchCount, "search_count"),
+        (OdxAction.Search,      "search"),
+        (OdxAction.Read,        "read"),
+        (OdxAction.FieldsGet,   "fields_get"),
+        (OdxAction.SearchRead,  "search_read"),
+        (OdxAction.Create,      "create"),
+        (OdxAction.Write,       "write"),
+        (OdxAction.Unlink,      "unlink"),
+        (OdxAction.CallMethod,  "call_method"),
+    ];
+
+    foreach (var (action, wire) in cases)
+    {
+        string? fn = action == OdxAction.CallMethod ? "my_method" : null;
+        byte[] body = OdxRequestBuilder.BuildExecute(action, "res.partner", instance, fnName: fn);
+        string json = Encoding.UTF8.GetString(body);
+        Assert(json.Contains($"\"action\":\"{wire}\"", StringComparison.Ordinal), $"{action} => expected \"{wire}\", got: {json}");
+    }
+
+    // If a new OdxAction value is added without a wire mapping + a case above, this trips.
+    Assert(Enum.GetValues<OdxAction>().Length == cases.Length, "an OdxAction value has no wire-string test case");
+
+    // call_method without fnName must fail fast client-side (the proxy would return -32002).
+    try
+    {
+        OdxRequestBuilder.BuildExecute(OdxAction.CallMethod, "res.partner", instance);
+        Assert(false, "call_method without fnName should throw ArgumentException");
+    }
+    catch (ArgumentException)
+    {
+        // expected
+    }
 }
 
 static JsonTypeInfo<long[]> Int64ArrayInfo() =>
