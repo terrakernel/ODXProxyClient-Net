@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Odx.Client — managed binding for the odxclient Rust cdylib.
+    TerraKernel.OdxClient — managed binding for the odxclient Rust cdylib.
     Two layers in one assembly: Interop (thin P/Invoke) + the typed convenience
     surface. Framework-agnostic (no WinUI); Windows x64 only via the native DLL.
     See IMPLEMENTATION-PLAN.md §7, §9.4.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>Odx.Client</AssemblyName>
-    <RootNamespace>Odx.Client</RootNamespace>
+    <AssemblyName>TerraKernel.OdxClient</AssemblyName>
+    <RootNamespace>TerraKernel.OdxClient</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -21,11 +21,34 @@
     <!-- Interop is intentionally undocumented in XML; silence CS1591 for now. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
-    <!-- Package metadata (for a future nupkg). -->
+    <!-- Package metadata. -->
+    <PackageId>TerraKernel.OdxClient</PackageId>
+    <Version>1.0.0</Version>
+    <Title>TerraKernel OdxClient</Title>
+    <Description>Native .NET client for odxproxy (a Rust/Axum proxy fronting Odoo's JSON-RPC). Rust C-ABI core consumed via P/Invoke; Native AOT-compatible, off-UI-thread + zero-copy by design. Windows x64 only.</Description>
+    <PackageTags>odoo;odxproxy;json-rpc;native;aot;interop;ffi;rust;terrakernel</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/terrakernel/ODXProxyClient-Net</PackageProjectUrl>
     <Copyright>Copyright (c) 2026 TerraKernel</Copyright>
     <Authors>TerraKernel</Authors>
     <RepositoryUrl>https://github.com/terrakernel/ODXProxyClient-Net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <!-- Deterministic, symbol-rich packages. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <!--
+    Pack the README and the native cdylib. The runtimes/win-x64/native/ layout is
+    what makes consumers auto-copy odxclient.dll on build/publish — critical for
+    AOT (which always publishes with a RID). The DLL must be built BEFORE `dotnet pack`
+    (CI: a release cargo build on windows-latest). See memory nuget-publishing.
+  -->
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\target\x86_64-pc-windows-msvc\release\odxclient.dll"
+          Pack="true" PackagePath="runtimes\win-x64\native\" />
+  </ItemGroup>
 
 </Project>

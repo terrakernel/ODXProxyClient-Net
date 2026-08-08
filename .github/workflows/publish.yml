@@ -1,0 +1,72 @@
+name: Publish to NuGet
+
+# Publishes TerraKernel.OdxClient to nuget.org via Trusted Publishing (OIDC) —
+# no long-lived API keys. Triggered by cutting a GitHub Release (tag e.g. v1.0.0),
+# or manually. The native odxclient.dll is built on windows-latest BEFORE pack so
+# the nupkg carries it under runtimes/win-x64/native/. See memory nuget-publishing.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.0). Blank = use csproj <Version>."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write   # required for Trusted Publishing (OIDC token exchange)
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (MSVC target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build native cdylib (release)
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.release.tag_name }}"
+          if (-not $v) { $v = "${{ github.event.inputs.version }}" }
+          $v = $v -replace '^v', ''
+          "value=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Publishing version: '$v' (blank = csproj default)"
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $packArgs = @('pack', 'dotnet/Odx.Client/Odx.Client.csproj', '-c', 'Release', '-o', 'artifacts')
+          if ("${{ steps.ver.outputs.value }}") { $packArgs += "-p:Version=${{ steps.ver.outputs.value }}" }
+          dotnet @packArgs
+
+      - name: NuGet login (Trusted Publishing → temporary API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          # nuget.org profile name of the account that owns the Trusted Publishing
+          # policy — NOT an email. Set as an Actions repo/org variable NUGET_USER.
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push
+        run: >
+          dotnet nuget push artifacts/*.nupkg
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
