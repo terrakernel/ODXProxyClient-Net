@@ -1,4 +1,4 @@
-namespace Odx.Client.Json;
+namespace TerraKernel.OdxClient.Json;
 
 /// <summary>
 /// An Odoo many2one field value. On the wire Odoo reads it as <c>[id, name]</c> or

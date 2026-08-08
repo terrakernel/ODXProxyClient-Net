@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Odx.Client.Interop;
+namespace TerraKernel.OdxClient.Interop;
 
 /// <summary>
 /// Blittable mirror of the Rust <c>OdxClientConfig</c> (repr(C), <c>src/client.rs</c>).

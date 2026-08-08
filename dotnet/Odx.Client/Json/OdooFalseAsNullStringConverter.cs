@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Odx.Client.Json;
+namespace TerraKernel.OdxClient.Json;
 
 /// <summary>
 /// Opt-in converter that reads Odoo's <c>false</c> (an unset scalar) as

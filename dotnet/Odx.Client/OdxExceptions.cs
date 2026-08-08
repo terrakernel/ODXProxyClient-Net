@@ -1,6 +1,6 @@
-using Odx.Client.Interop;
+using TerraKernel.OdxClient.Interop;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>Proxy authentication failed (HTTP 401 / <c>-32000</c>).</summary>
 public sealed class OdxAuthException : OdxException

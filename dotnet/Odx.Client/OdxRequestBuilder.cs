@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// Builds odxproxy request bodies with <see cref="Utf8JsonWriter"/> — reflection-free

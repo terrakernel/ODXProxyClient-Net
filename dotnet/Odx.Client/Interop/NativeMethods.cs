@@ -4,14 +4,14 @@ using System.Runtime.InteropServices;
 // x64 Windows C calling convention that Rust `extern "C"` emits.
 using unsafe OdxCallbackFn = delegate* unmanaged[Cdecl]<
     nint,                        // user_data
-    Odx.Client.Interop.OdxStatus,
+    TerraKernel.OdxClient.Interop.OdxStatus,
     ushort,                      // http_status
     byte*,                       // data_ptr
     nuint,                       // data_len
     nint,                        // owner (OdxBuffer*)
     void>;
 
-namespace Odx.Client.Interop;
+namespace TerraKernel.OdxClient.Interop;
 
 /// <summary>
 /// Thin P/Invoke surface over <c>odxclient.dll</c>. Source-generated

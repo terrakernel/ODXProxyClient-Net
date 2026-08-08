@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Odx.Client;
-using Odx.Client.Interop;
+using TerraKernel.OdxClient;
+using TerraKernel.OdxClient.Interop;
 
 // Config path: first CLI arg, else the RealTest config (same gitignored file).
 string configPath = args.Length > 0 ? args[0] : "dotnet/Odx.Client.RealTest/realtest.local.json";

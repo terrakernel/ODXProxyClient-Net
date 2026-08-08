@@ -1,4 +1,4 @@
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// The Odoo connection details odxproxy needs on every call (it is stateless w.r.t.

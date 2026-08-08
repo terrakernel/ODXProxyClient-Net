@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Odx.Client.Json;
+namespace TerraKernel.OdxClient.Json;
 
 /// <summary>
 /// Opt-in <see cref="System.Text.Json"/> converter for <see cref="Many2One"/>. Reads

@@ -5,9 +5,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using Odx.Client;
-using Odx.Client.Interop;
-using Odx.Client.Json;
+using TerraKernel.OdxClient;
+using TerraKernel.OdxClient.Interop;
+using TerraKernel.OdxClient.Json;
 
 int failures = 0;
 

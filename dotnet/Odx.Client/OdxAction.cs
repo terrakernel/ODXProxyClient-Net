@@ -1,4 +1,4 @@
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// The odxproxy <c>execute</c> actions — the closed set the proxy accepts on

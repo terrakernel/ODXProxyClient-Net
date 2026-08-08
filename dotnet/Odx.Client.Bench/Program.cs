@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using Odx.Client;
-using Odx.Client.Interop;
+using TerraKernel.OdxClient;
+using TerraKernel.OdxClient.Interop;
 
 // Native-AOT overhead bench. Args: --url <base> --iters N --warmup W --size small|large
 string url = "http://127.0.0.1:6699";

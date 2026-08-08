@@ -1,6 +1,6 @@
-using Odx.Client.Interop;
+using TerraKernel.OdxClient.Interop;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// Base exception for odxclient failures. Carries the coarse transport/proxy

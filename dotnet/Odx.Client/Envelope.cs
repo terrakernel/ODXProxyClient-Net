@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
-using Odx.Client.Interop;
+using TerraKernel.OdxClient.Interop;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// Parses odxproxy responses off the caller's thread. Reflection-free

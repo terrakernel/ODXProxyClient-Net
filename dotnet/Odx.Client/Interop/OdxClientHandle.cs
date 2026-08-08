@@ -1,6 +1,6 @@
 using Microsoft.Win32.SafeHandles;
 
-namespace Odx.Client.Interop;
+namespace TerraKernel.OdxClient.Interop;
 
 /// <summary>
 /// Owns a native <c>OdxClient*</c>. Guarantees the connection pool is released via

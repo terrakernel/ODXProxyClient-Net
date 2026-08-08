@@ -1,6 +1,6 @@
-using Odx.Client.Interop;
+using TerraKernel.OdxClient.Interop;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// A completed RPC response. <see cref="Body"/> is the raw response bytes (the

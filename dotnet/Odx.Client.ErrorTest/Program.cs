@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Odx.Client;
-using Odx.Client.Interop;
+using TerraKernel.OdxClient;
+using TerraKernel.OdxClient.Interop;
 
 // Same gitignored config as the other real-instance tests.
 string configPath = args.Length > 0 ? args[0] : "dotnet/Odx.Client.RealTest/realtest.local.json";

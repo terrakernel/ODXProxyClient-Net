@@ -81,7 +81,7 @@ dotnet build dotnet/Odx.Client/Odx.Client.csproj -c Release
 
 ```csharp
 using System.Text.Json.Serialization;
-using Odx.Client;
+using TerraKernel.OdxClient;
 
 // 1) Declare the shapes you deserialize. Source-generated => reflection-free & AOT-safe.
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
@@ -260,7 +260,7 @@ var res = await client.ExecuteAsync<Partner[]>(
 
 ## Odoo wire helpers (opt-in)
 
-Namespace `Odx.Client.Json` ships `System.Text.Json` converters for Odoo's wire quirks. They are
+Namespace `TerraKernel.OdxClient.Json` ships `System.Text.Json` converters for Odoo's wire quirks. They are
 **opt-in** — add them to your own `JsonSerializerOptions`; they are never applied implicitly and
 never live in the Rust core.
 

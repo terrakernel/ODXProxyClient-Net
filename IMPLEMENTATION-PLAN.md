@@ -36,17 +36,17 @@ off the UI thread (the hard invariant in [`ffi-async-model`](.claude/memory/ffi-
  .NET consumer (WinUI POS, or any .NET app)
    │  await client.SearchReadAsync<Partner>(...)
    ▼
- Odx.Client            (typed convenience layer — C#)
+ TerraKernel.OdxClient         (typed convenience layer — C#)
    • builds request body with Utf8JsonWriter (off UI thread)
    • TaskCompletionSource<T> (RunContinuationsAsynchronously)
    • parses response T off-thread (Utf8JsonReader + source-gen)
-   • Many2One / false-as-null converters (opt-in, Odx.Client.Json)
+   • Many2One / false-as-null converters (opt-in, TerraKernel.OdxClient.Json)
    │
    ▼  [LibraryImport] flat C ABI, opaque handles, function-pointer callback
- Odx.Client.Interop    (thin P/Invoke — C#, no logic)
+ TerraKernel.OdxClient.Interop (thin P/Invoke — C#, no logic)
    │
    ▼  odxclient.dll  (C ABI)
- odxclient crate       (Rust cdylib — ALL protocol/transport/retry logic)
+ odxclient crate               (Rust cdylib — ALL protocol/transport/retry logic)
    • one process-global tokio runtime + per-client reqwest::Client (keep-alive pool)
    • submit → return request handle → fire caller callback on completion
    • cancel-in-flight; panics caught at the boundary
@@ -313,7 +313,7 @@ profiles often flip this.)
 
 ## 7. .NET binding (two layers)
 
-### 7.1 Interop layer — `Odx.Client.Interop` (thin, no logic)
+### 7.1 Interop layer — `TerraKernel.OdxClient.Interop` (thin, no logic)
 `[LibraryImport("odxclient")]` `partial` methods (source-generated, AOT-friendly, reflection-free
 — constraint #7) mirroring §2.2. Blittable `OdxClientConfig`. The callback is a single static
 `[UnmanagedCallersOnly]` method exposed as a `delegate* unmanaged<…>` — **no per-call delegate
@@ -384,7 +384,7 @@ return DeserializeOrThrow<T>(resp);   // Utf8JsonReader over unmanaged span; off
 - Body build uses a "hop only if currently on a UI `SynchronizationContext`" helper — no wasted
   bounce for small requests (perf #1), but large batch writes never serialize on the UI thread.
 
-### 7.3 Public surface (`Odx.Client`)
+### 7.3 Public surface (`TerraKernel.OdxClient`)
 - Primary: `...Async<T>` — `SearchReadAsync<T>`, `SearchAsync`, `ReadAsync<T>`, `SearchCountAsync`,
   `FieldsGetAsync`, `CreateAsync`, `WriteAsync`, `UnlinkAsync`, `CallMethodAsync<T>`,
   `GetVersionAsync`, `GetLicenseAsync`, `GetAboutAsync`. Each takes a `CancellationToken`.
@@ -394,7 +394,7 @@ return DeserializeOrThrow<T>(resp);   // Utf8JsonReader over unmanaged span; off
 - Client-side pagination reset (zero `fields/order/limit/offset` for actions where they're
   meaningless) lives here, never in Rust (per `ffi-async-model`).
 
-### 7.4 Wire helpers — `Odx.Client.Json` (opt-in, segregated)
+### 7.4 Wire helpers — `TerraKernel.OdxClient.Json` (opt-in, segregated)
 `Many2OneConverter` and an opt-in false-as-null scalar converter as `System.Text.Json`
 `JsonConverter`s the app plugs into its own `JsonSerializerOptions`; a source-gen `JsonSerializerContext`
 for AOT. **Encode side emits the bare int id, not `[id,name]`** (Odoo write semantics — the
@@ -460,7 +460,7 @@ to keep every incremental build fast) to emit `include/odxclient.h`. The .NET co
 documentation. (Low-maintenance per deliverable #2.)
 
 ### 9.4 .NET packaging
-`Odx.Client` targets modern .NET (AOT-compatible, no .NET Framework). `odxclient.dll` ships as a
+`TerraKernel.OdxClient` targets modern .NET (AOT-compatible, no .NET Framework). `odxclient.dll` ships as a
 native runtime asset under `runtimes/win-x64/native/` so the layout is nupkg-ready (deliverable #4).
 
 ---
@@ -490,7 +490,7 @@ native runtime asset under `runtimes/win-x64/native/` so the layout is nupkg-rea
 4. **.NET interop layer**: `LibraryImport` decls, `[UnmanagedCallersOnly]` callback, `SafeHandle`.
 5. **.NET convenience layer**: callback→`Task` bridge (§7.2), `...Async<T>` surface, off-UI-thread
    guarantees, typed exceptions, `CancellationToken` wiring.
-6. **Wire helpers** (`Odx.Client.Json`) + source-gen context.
+6. **Wire helpers** (`TerraKernel.OdxClient.Json`) + source-gen context.
 7. **Tests (§10) + overhead bench + README** (the loud DO/DON'T threading block — CLAUDE.md
    README must-haves).
 8. **cbindgen `.h` + nupkg-ready packaging layout.**

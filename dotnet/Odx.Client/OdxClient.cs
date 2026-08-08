@@ -2,9 +2,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json.Serialization.Metadata;
-using Odx.Client.Interop;
+using TerraKernel.OdxClient.Interop;
 
-namespace Odx.Client;
+namespace TerraKernel.OdxClient;
 
 /// <summary>
 /// Managed client over the odxclient Rust core. All network + response-buffer work

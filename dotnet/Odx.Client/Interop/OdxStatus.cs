@@ -1,4 +1,4 @@
-namespace Odx.Client.Interop;
+namespace TerraKernel.OdxClient.Interop;
 
 /// <summary>
 /// Transport/proxy outcome category reported across the FFI boundary. Mirrors the
