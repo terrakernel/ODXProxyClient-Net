@@ -66,8 +66,18 @@ jobs:
           user: ${{ vars.NUGET_USER }}
 
       - name: Push
-        run: >
-          dotnet nuget push artifacts/*.nupkg
-          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
-          --source https://api.nuget.org/v3/index.json
-          --skip-duplicate
+        shell: pwsh
+        run: |
+          # pwsh does not glob-expand args to native commands, so resolve the
+          # .nupkg in PowerShell and push the concrete path. dotnet auto-pushes
+          # the matching .snupkg sitting next to it.
+          $pkgs = Get-ChildItem artifacts/*.nupkg
+          if (-not $pkgs) { throw "No .nupkg found in artifacts/" }
+          foreach ($pkg in $pkgs) {
+            Write-Host "Pushing $($pkg.Name)"
+            dotnet nuget push $pkg.FullName `
+              --api-key ${{ steps.login.outputs.NUGET_API_KEY }} `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "push failed for $($pkg.Name)" }
+          }
