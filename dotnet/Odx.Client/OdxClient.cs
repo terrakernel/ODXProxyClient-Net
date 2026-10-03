@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -203,11 +204,91 @@ public sealed class OdxClient : IDisposable
         return GetVersionAsync(body.AsMemory(), resultType, timeoutSecs, ct);
     }
 
+    // ---- v2 (JSON-2, Odoo 19+): /v2/odoo/execute + /v2/odoo/version ----
+    // Additive: the v1 surface above is unchanged. Most callers want ForInstanceV2.
+
+    /// <summary>
+    /// Bind a v2 session to one Odoo instance. v2 has no <c>user_id</c> (Odoo derives the user
+    /// from the key), and <paramref name="apiKey"/> must be an Odoo <b>API key</b>, not a
+    /// password. <paramref name="context"/> (a JSON object, e.g. <c>lang</c>, <c>tz</c>,
+    /// <c>allowed_company_ids</c>) is merged into every call; a call's own keys win.
+    /// </summary>
+    public OdxSessionV2 ForInstanceV2(string url, string db, string apiKey, OdxJson context = default)
+        => new(this, url, db, apiKey, context);
+
+    /// <summary>
+    /// Bind a v2 session reusing a v1 <see cref="OdooInstance"/>; its <c>UserId</c> is ignored.
+    /// </summary>
+    public OdxSessionV2 ForInstanceV2(OdooInstance instance, OdxJson context = default)
+    {
+        ArgumentNullException.ThrowIfNull(instance);
+        return new(this, instance.Url, instance.Db, instance.ApiKey, context);
+    }
+
+    /// <summary>POST <c>/v2/odoo/execute</c> with a full JSON request body (raw response).</summary>
+    public Task<OdxResponse> ExecuteV2Async(ReadOnlyMemory<byte> body, uint timeoutSecs = 0, CancellationToken cancellationToken = default)
+        => SubmitWithBody(body, timeoutSecs, cancellationToken, Endpoint.ExecuteV2);
+
+    /// <summary>
+    /// POST <c>/v2/odoo/execute</c> and deserialize the envelope's <c>result</c> into
+    /// <typeparamref name="T"/>. Throws a typed <see cref="OdxException"/> on error.
+    /// </summary>
+    public async Task<T?> ExecuteV2Async<T>(ReadOnlyMemory<byte> body, JsonTypeInfo<T> resultType, uint timeoutSecs = 0, CancellationToken cancellationToken = default)
+    {
+        OdxResponse resp = await SubmitWithBody(body, timeoutSecs, cancellationToken, Endpoint.ExecuteV2).ConfigureAwait(false);
+        return ParseEnvelope(resp, resultType);
+    }
+
+    /// <summary>POST <c>/v2/odoo/version</c> with body <c>{id, url}</c> (raw response).</summary>
+    public Task<OdxResponse> GetVersionV2Async(ReadOnlyMemory<byte> body, uint timeoutSecs = 0, CancellationToken cancellationToken = default)
+        => SubmitWithBody(body, timeoutSecs, cancellationToken, Endpoint.VersionV2);
+
+    /// <summary>
+    /// POST <c>/v2/odoo/version</c> for an Odoo URL. Throws
+    /// <see cref="OdxJson2UnavailableException"/> when the server has no JSON-2 (Odoo 18 or older).
+    /// </summary>
+    public async Task<OdxVersionInfoV2> GetVersionV2Async(string odooUrl, uint timeoutSecs = 0, CancellationToken cancellationToken = default)
+    {
+        byte[] body = OdxRequestBuilder.BuildVersion(odooUrl);
+        OdxResponse resp = await SubmitWithBody(body, timeoutSecs, cancellationToken, Endpoint.VersionV2).ConfigureAwait(false);
+        return ParseEnvelope(resp, OdxInternalJsonContext.Default.OdxVersionInfoV2)
+            ?? throw new OdxException(OdxStatus.Ok, "version returned null");
+    }
+
+    private readonly ConcurrentDictionary<string, bool> _v2Support = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether the Odoo at <paramref name="odooUrl"/> can be reached through v2, i.e. runs
+    /// Odoo 19+. Probes <c>/v2/odoo/version</c> once and caches the answer per URL for the
+    /// life of this client; <c>-32006</c> or a major version below 19 means "use v1".
+    /// Network and proxy errors are thrown, not cached. Note: <c>-32006</c> on a server you
+    /// know is 19+ is a database/<c>dbfilter</c> problem, not a version problem.
+    /// </summary>
+    public async Task<bool> SupportsV2Async(string odooUrl, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(odooUrl);
+        if (_v2Support.TryGetValue(odooUrl, out bool cached))
+            return cached;
+
+        bool supported;
+        try
+        {
+            OdxVersionInfoV2 info = await GetVersionV2Async(odooUrl, 0, cancellationToken).ConfigureAwait(false);
+            supported = info.Major >= 19;
+        }
+        catch (OdxJson2UnavailableException)
+        {
+            supported = false;
+        }
+        _v2Support[odooUrl] = supported;
+        return supported;
+    }
+
     public void Dispose() => _handle.Dispose();
 
     // ---- submit plumbing ----
 
-    private enum Endpoint { Execute, Version, License, About, Metrics }
+    private enum Endpoint { Execute, Version, License, About, Metrics, ExecuteV2, VersionV2 }
 
     private unsafe Task<OdxResponse> SubmitWithBody(ReadOnlyMemory<byte> body, uint timeoutSecs, CancellationToken ct, Endpoint endpoint)
     {
@@ -224,9 +305,13 @@ public sealed class OdxClient : IDisposable
             nint client = _handle.DangerousGetHandle();
             fixed (byte* p = body.Span)
             {
-                status = endpoint == Endpoint.Version
-                    ? NativeMethods.odx_get_version(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req)
-                    : NativeMethods.odx_execute(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req);
+                status = endpoint switch
+                {
+                    Endpoint.Version => NativeMethods.odx_get_version(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                    Endpoint.ExecuteV2 => NativeMethods.odx_execute_v2(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                    Endpoint.VersionV2 => NativeMethods.odx_get_version_v2(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                    _ => NativeMethods.odx_execute(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                };
             }
         }
         finally

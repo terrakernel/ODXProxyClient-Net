@@ -119,11 +119,17 @@ internal static class Envelope
         _ = http; // reserved for richer diagnostics later
         return status switch
         {
-            // HTTP 2xx + an error body => Odoo-side logic error.
-            OdxStatus.Ok => new OdxOdooException(rpcCode ?? 0, message, data),
+            // HTTP 2xx + an error body => Odoo-side logic error (code 0 included: Odoo 19+
+            // /jsonrpc errors carry code 0; only a 403 is a license error). -32006 is the
+            // one proxy code that arrives on a 200.
+            OdxStatus.Ok => rpcCode == -32006
+                ? new OdxJson2UnavailableException(status, message, rpcCode, data)
+                : MapOdooError(rpcCode ?? 0, message, data),
 
             OdxStatus.Unauthorized => new OdxAuthException(status, message, rpcCode, data),
-            OdxStatus.BadRequest => new OdxBadRequestException(status, message, rpcCode, data),
+            OdxStatus.BadRequest => rpcCode == -32007
+                ? new OdxInvalidRequestException(status, message, rpcCode, data)
+                : new OdxBadRequestException(status, message, rpcCode, data),
             OdxStatus.Forbidden => new OdxLicenseException(status, message, rpcCode, data),
             OdxStatus.UpstreamTimeout => new OdxUpstreamTimeoutException(status, message, rpcCode, data),
             OdxStatus.UpstreamConnect => new OdxUpstreamConnectException(status, message, rpcCode, data),
@@ -135,4 +141,17 @@ internal static class Envelope
             _ => new OdxServerException(status, message, rpcCode, data),
         };
     }
+
+    // Codes 100-599 on a 200 are Odoo HTTP statuses (always on v2); anything else is
+    // Odoo's own JSON-RPC code. All map to OdxOdooException or a subclass.
+    private static OdxOdooException MapOdooError(long code, string? message, string? data) => code switch
+    {
+        401 => new OdxOdooAuthException(code, message, data),
+        403 => new OdxOdooAccessException(code, message, data),
+        404 => new OdxOdooNotFoundException(code, message, data),
+        409 => new OdxOdooConflictException(code, message, data),
+        422 => new OdxOdooValidationException(code, message, data),
+        >= 500 and <= 599 => new OdxOdooServerException(code, message, data),
+        _ => new OdxOdooException(code, message, data),
+    };
 }

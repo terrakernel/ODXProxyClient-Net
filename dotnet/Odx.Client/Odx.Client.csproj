@@ -23,7 +23,7 @@
 
     <!-- Package metadata. -->
     <PackageId>TerraKernel.OdxClient</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Title>TerraKernel OdxClient</Title>
     <Description>Native .NET client for odxproxy (a Rust/Axum proxy fronting Odoo's JSON-RPC). Rust C-ABI core consumed via P/Invoke; Native AOT-compatible, off-UI-thread + zero-copy by design. Windows x64 only.</Description>
     <PackageTags>odoo;odxproxy;json-rpc;native;aot;interop;ffi;rust;terrakernel</PackageTags>

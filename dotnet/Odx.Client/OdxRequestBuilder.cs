@@ -121,7 +121,10 @@ public static class OdxRequestBuilder
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown OdxAction."),
     };
 
-    /// <summary>Build a POST <c>/api/odoo/version</c> body <c>{id, url}</c>.</summary>
+    /// <summary>
+    /// Build a version body <c>{id, url}</c> — the same shape for <c>/api/odoo/version</c>
+    /// and <c>/v2/odoo/version</c>.
+    /// </summary>
     public static byte[] BuildVersion(string odooUrl, string? id = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(odooUrl);
@@ -132,6 +135,68 @@ public static class OdxRequestBuilder
             w.WriteStartObject();
             w.WriteString("id"u8, id ?? NextId());
             w.WriteString("url"u8, odooUrl);
+            w.WriteEndObject();
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>
+    /// Build a POST <c>/v2/odoo/execute</c> body (JSON-2, Odoo 19+):
+    /// <c>{id, model_id, method, kwargs, odoo_instance{url, db, api_key}}</c>.
+    /// <paramref name="kwargsJson"/> must be a JSON object of named arguments (spliced in
+    /// verbatim, keys never transformed); empty becomes <c>{}</c>. There is no
+    /// <c>user_id</c> in v2. Prefer <see cref="OdxSessionV2"/>, which builds <c>kwargs</c>
+    /// for you and merges the session context.
+    /// </summary>
+    public static byte[] BuildExecuteV2(
+        string modelId,
+        string method,
+        string odooUrl,
+        string db,
+        string apiKey,
+        ReadOnlySpan<byte> kwargsJson = default,
+        string? id = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(modelId);
+        ArgumentException.ThrowIfNullOrEmpty(method);
+        if (!kwargsJson.IsEmpty)
+        {
+            var reader = new Utf8JsonReader(kwargsJson);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+                throw new ArgumentException("kwargsJson must be a JSON object.", nameof(kwargsJson));
+        }
+        byte[] instance = BuildInstanceV2(odooUrl, db, apiKey);
+
+        var buffer = new ArrayBufferWriter<byte>(256);
+        using (var w = new Utf8JsonWriter(buffer))
+        {
+            w.WriteStartObject();
+            w.WriteString("id"u8, id ?? NextId());
+            w.WriteString("model_id"u8, modelId);
+            w.WriteString("method"u8, method);
+            w.WritePropertyName("kwargs"u8);
+            WriteRawOrDefault(w, kwargsJson, "{}"u8);
+            w.WritePropertyName("odoo_instance"u8);
+            w.WriteRawValue(instance, skipInputValidation: true);
+            w.WriteEndObject();
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
+    /// <summary>The v2 <c>odoo_instance</c> object: <c>{url, db, api_key}</c>, no <c>user_id</c>.</summary>
+    internal static byte[] BuildInstanceV2(string odooUrl, string db, string apiKey)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(odooUrl);
+        ArgumentException.ThrowIfNullOrEmpty(db);
+        ArgumentException.ThrowIfNullOrEmpty(apiKey);
+
+        var buffer = new ArrayBufferWriter<byte>(128);
+        using (var w = new Utf8JsonWriter(buffer))
+        {
+            w.WriteStartObject();
+            w.WriteString("url"u8, odooUrl);
+            w.WriteString("db"u8, db);
+            w.WriteString("api_key"u8, apiKey);
             w.WriteEndObject();
         }
         return buffer.WrittenSpan.ToArray();
@@ -157,6 +222,6 @@ public static class OdxRequestBuilder
 
     // The proxy echoes id but we don't correlate on it (the callback cookie does that);
     // a cheap monotonic value avoids a per-call Guid allocation.
-    private static string NextId() =>
+    internal static string NextId() =>
         Interlocked.Increment(ref _idSeq).ToString(CultureInfo.InvariantCulture);
 }
