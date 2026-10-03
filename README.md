@@ -1,9 +1,9 @@
 # ODXProxyClient-Net
 
 A fast, native **.NET client for [odxproxy](https://github.com/terrakernel/theodxproxy)** — a
-Rust/Axum proxy that fronts Odoo's JSON-RPC API.
+Rust/Axum proxy that fronts Odoo's JSON-RPC API (v1) and Odoo 19+'s JSON-2 API (v2).
 
-The performance-critical core (connection handling, the HTTP round-trip, retries, cancellation) is
+The performance-critical core (connection handling, the HTTP round-trip, cancellation) is
 written in **Rust** and compiled to a C-ABI `cdylib` (`odxclient.dll`). The .NET layer is a thin,
 AOT-friendly binding: no connection logic runs in the CLR, and all network + JSON work happens off
 your UI thread automatically.
@@ -148,6 +148,8 @@ No `Task.Run`, no dispatcher marshalling — the network + parse already happene
 | --- | --- | --- |
 | Odoo RPC | `ExecuteAsync` | POST `/api/odoo/execute` |
 | Odoo version | `GetVersionAsync` | POST `/api/odoo/version` |
+| Odoo RPC, v2 (JSON-2) | [`OdxSessionV2`](#v2-api-odoo-19-json-2) / `ExecuteV2Async` (raw) | POST `/v2/odoo/execute` |
+| Odoo version, v2 | `GetVersionV2Async` | POST `/v2/odoo/version` |
 | License | `GetLicenseAsync` | GET `/_/license` |
 | Build/version | `GetAboutAsync` | GET `/_/about` |
 | Prometheus | `GetMetricsAsync` | GET `/_/metrics` |
@@ -215,6 +217,100 @@ For large batch bodies the structured overloads serialize on the thread pool whe
 
 ---
 
+## v2 API (Odoo 19+, JSON-2)
+
+ODXProxy 0.9.0 added `/v2` endpoints that reach Odoo over its **JSON-2** API instead of the legacy
+`/jsonrpc`. This client exposes them through a separate session type, `OdxSessionV2`, on the same
+`OdxClient`:
+
+| Odoo version | v1 (`ExecuteAsync`) | v2 (`ForInstanceV2`) |
+| --- | --- | --- |
+| 18 and older | ✅ | ❌ (`OdxJson2UnavailableException`) |
+| 19 – 21 | ✅ | ✅ |
+| 22+ | ❌ (Odoo removes `/jsonrpc`) | ✅ |
+
+v1 is not deprecated and its API is unchanged.
+
+```csharp
+using System.Text.Json.Nodes;
+
+// One session per Odoo instance. No user id: JSON-2 derives the user from the key, which must be
+// an Odoo API key (not a password; scope `rpc` on Odoo 20+). The context is merged into every call.
+OdxSessionV2 erp = client.ForInstanceV2(
+    url: "https://erp.example.com", db: "prod", apiKey: "<odoo api key>",
+    context: new JsonObject { ["lang"] = "en_US", ["tz"] = "Asia/Jakarta", ["allowed_company_ids"] = new JsonArray(1) });
+
+Partner[]? partners = await erp.SearchReadAsync("res.partner", AppJson.Default.PartnerArray,
+    domain: OdxJson.Parse("""[["is_company","=",true]]"""), fields: ["name", "email"], limit: 100);
+
+long[] ids = await erp.CreateAsync("res.partner", OdxJson.Parse("""[{"name":"Acme"},{"name":"Globex"}]""")); // [41, 42]
+long id    = await erp.CreateOneAsync("res.partner", new JsonObject { ["name"] = "Initech" });             // 43
+await erp.WriteAsync("res.partner", ids, new JsonObject { ["comment"] = "via v2" });
+await erp.UnlinkAsync("res.partner", ids);
+
+await erp.CallMethodAsync("account.move", "action_post", AppJson.Default.JsonElement, ids: [invoiceId]);
+await erp.CallMethodAsync("res.partner", "name_search", AppJson.Default.JsonElement,
+    kwargs: new JsonObject { ["name"] = "Acm", ["limit"] = 5 });
+```
+
+Already have a v1 `OdooInstance`? `client.ForInstanceV2(odoo)` reuses it (its `UserId` is ignored).
+
+### Methods and the `kwargs` they send
+
+Method names match v1's `OdxAction` values. Every method builds the JSON-2 `kwargs` object using
+**Odoo's Python parameter names exactly** (never case-converted): Odoo checks each key against the
+method signature and rejects an unknown one with a 422.
+
+| Method | Odoo method | `kwargs` | Returns |
+| --- | --- | --- | --- |
+| `SearchAsync(model, domain, offset?, limit?, order?)` | `search` | `domain`, `offset`, `limit`, `order` | `long[]` |
+| `SearchReadAsync<T>(model, type, domain?, fields?, offset?, limit?, order?)` | `search_read` | same keys | `T` |
+| `SearchCountAsync(model, domain, limit?)` | `search_count` | `domain`, `limit` | `long` |
+| `ReadAsync<T>(model, ids, type, fields?, load?)` | `read` | `ids`, `fields`, `load` | `T` |
+| `FieldsGetAsync<T>(model, type, allfields?, attributes?)` | `fields_get` | `allfields`, `attributes` | `T` |
+| `CreateAsync(model, vals)` | `create` | `vals_list` (**always an array**) | `long[]` (**always**) |
+| `CreateOneAsync(model, vals)` | `create` | `vals_list: [vals]` | `long` |
+| `WriteAsync(model, ids, vals)` | `write` | `ids`, `vals` | `bool` |
+| `UnlinkAsync(model, ids)` | `unlink` | `ids` | `bool` |
+| `CallMethodAsync<T>(model, method, type, ids?, kwargs?)` | *method* | `ids` (only if given) + `kwargs` | `T` |
+| `GetVersionAsync()` / `client.GetVersionV2Async(url)` | – (`POST /v2/odoo/version`) | – | `OdxVersionInfoV2` |
+
+Every method also takes an optional per-call `context` (merged over the session's; the call's keys
+win), `timeoutSecs` and `CancellationToken`. For `CallMethodAsync`, put `context` inside `kwargs`.
+
+- **Unset arguments are omitted**, not sent as `null`, so Odoo's own defaults apply. An unset
+  `domain` is `[]` for `search`/`search_count` and omitted for `search_read`.
+- **`ids` only goes to record methods.** The typed methods never send it to `@api.model` methods
+  (`search`, `search_read`, `search_count`, `fields_get`, `create`). With `CallMethodAsync`, pass
+  `ids` only for record methods.
+- **No positional arguments.** `CallMethodAsync` takes named arguments only, as a JSON object; the
+  names are the Odoo method's Python parameters (see its definition, or `/doc/<model>` in Odoo).
+- **`create` always returns an array of ids**, even for one record. Use `CreateOneAsync` for one id.
+
+**JSON arguments** (`domain`, `vals`, `context`, `kwargs`) are `OdxJson`, which accepts either a
+`JsonNode` (`new JsonObject { … }`, `new JsonArray(…)`) or pre-serialized UTF-8 bytes
+(`"""…"""u8.ToArray()`, `OdxJson.Parse(text)`). Bytes are spliced into the request verbatim — the
+fastest path. Either way the keys inside are Odoo field names and are sent exactly as given.
+
+### Choosing v1 or v2
+
+Prefer choosing explicitly. To pick automatically, `await client.SupportsV2Async(url)` (or
+`session.IsSupportedAsync()`) probes `/v2/odoo/version` once and caches the answer per URL. Don't
+probe before every call. A `-32006` from a server you know runs 19+ is a database/`dbfilter`
+problem, not a version problem.
+
+### What's different on v2
+
+- **Database selection follows `dbfilter`.** JSON-2 picks the database by header. On hosts that pick
+  the database from the hostname, `url` must be that database's own hostname, or calls fail with
+  `OdxJson2UnavailableException`. (v1 is not affected.)
+- **Odoo API keys expire.** Keys of non-admin users expire on a schedule; that surfaces as
+  `OdxOdooAuthException` — show it to the end user, it is not a proxy misconfiguration.
+- **Binary fields** read on Odoo 20+ (v1 and v2 alike) are `{content, filename, size}` objects, not
+  bare base64 — see `OdooBinary` below. Empty values are still `false`; datetimes are UTC strings.
+
+---
+
 ## Error handling
 
 Failures throw a typed `OdxException`. Cancellation throws `OperationCanceledException`.
@@ -230,6 +326,8 @@ Failures throw a typed `OdxException`. Cancellation throws `OperationCanceledExc
 | `OdxServerException` | any other non-2xx |
 | `OdxTransportException` | couldn't reach the proxy (DNS/TCP/TLS, local timeout) |
 | **`OdxOdooException`** | **HTTP 200 but Odoo returned a logic error** (see below) |
+| `OdxJson2UnavailableException` | v2: no JSON-2 on that Odoo (200 / `-32006`): Odoo ≤ 18 (use v1), or the db isn't selectable on that host (`dbfilter`) |
+| `OdxInvalidRequestException` | v2: invalid `model_id`/`method`, or `db`/`api_key` not header-safe (400 / `-32007`); a subclass of `OdxBadRequestException` |
 
 > **The HTTP-200 trap:** odxproxy returns Odoo-side *logic* errors (access errors, validation
 > errors, …) as **HTTP 200** with an `error` object in the body. The typed methods detect this and
@@ -246,6 +344,29 @@ catch (OdxOdooException ex)      { /* Odoo said no: ex.OdooCode, ex.Message, ex.
 catch (OdxAuthException)         { /* bad proxy key */ }
 catch (OperationCanceledException) { /* cancelled */ }
 ```
+
+`OdxOdooException` has subclasses keyed by Odoo's HTTP status, which v2 always reports as the error
+code (v1 only when Odoo itself answered non-2xx). `catch (OdxOdooException)` still catches them all:
+
+| Exception | Code (on HTTP 200) | Meaning |
+| --- | --- | --- |
+| `OdxOdooAuthException` | `401` | **Odoo** rejected the Odoo API key: invalid, expired, wrong scope, or a password. Not the proxy key (`OdxAuthException`). |
+| `OdxOdooAccessException` | `403` | access rights, or a private (`_`-prefixed) method |
+| `OdxOdooNotFoundException` | `404` | unknown model/method, or the record doesn't exist |
+| `OdxOdooConflictException` | `409` | Odoo lock conflict |
+| `OdxOdooValidationException` | `422` | validation/user error, or bad arguments (unknown kwarg, `ids` on an `@api.model` method) |
+| `OdxOdooServerException` | `5xx` | Odoo server error |
+
+Every Odoo error keeps the raw `error.data` in `RpcData`; `OdooErrorName` exposes `data.name`
+(e.g. `odoo.exceptions.ValidationError`) for finer branching. Never parse `data.debug`.
+
+> **Code `0` is not a license error.** Odoo 19+ returns every `/jsonrpc` error with code `0` on
+> HTTP 200; that is an `OdxOdooException`. Only an HTTP 403 is `OdxLicenseException`.
+
+**Retries.** The client never retries on its own. If you add a retry loop, retry only these:
+`OdxUpstreamConnectException` (`-32004`) and `OdxOdooConflictException` (`409`), with backoff; and
+`OdxUpstreamTimeoutException` (`-32003`) **only for idempotent calls** (reads), because the upstream
+call may still have run. Nothing else is retryable.
 
 ## Cancellation
 
@@ -267,6 +388,9 @@ never live in the Rust core.
 - **`Many2One` + `Many2OneConverter`** — reads Odoo's `[id, name]` (or `false` when unset); **writes
   the bare integer id** (or `false`), matching Odoo's write semantics.
 - **`OdooFalseAsNullStringConverter`** — reads Odoo's `false` (an unset scalar) as `null`.
+- **`OdooBinary` + `OdooBinaryConverter`** — an Odoo binary field. Reads the Odoo 20+
+  `{content, filename, size}` object, a bare base64 string (Odoo ≤ 19), or `false` (→ `null`);
+  writes a bare base64 string, or `{content, filename}` when a file name is set.
 
 ```csharp
 var opts = new JsonSerializerOptions();
@@ -286,13 +410,20 @@ cargo test                     # in-crate tests (async round-trip, off-thread de
 # .NET binding + end-to-end smoke test (loads the real DLL against a local mock server)
 dotnet build dotnet/Odx.Client/Odx.Client.csproj -c Release
 dotnet run --project dotnet/Odx.Client.SmokeTest/Odx.Client.SmokeTest.csproj -c Release
+
+# v2 offline tests: a wire-JSON snapshot per method + error mapping per code (mock server)
+dotnet run --project dotnet/Odx.Client.V2Test/Odx.Client.V2Test.csproj -c Release
+
+# v2 live integration test (real proxy + Odoo 19+). Keys come from env vars only;
+# see the header of dotnet/Odx.Client.V2LiveTest/Program.cs.
+dotnet run --project dotnet/Odx.Client.V2LiveTest/Odx.Client.V2LiveTest.csproj -c Release
 ```
 
 ## Status
 
-The Rust core and the .NET binding are feature-complete and covered by an end-to-end smoke test.
-Still on the roadmap: an overhead benchmark, a generated C header (`cbindgen`) for C/C++ consumers,
-and NuGet packaging. See [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) for the design and the
+Published on NuGet as `TerraKernel.OdxClient`; changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
+The binding overhead is measured in [`BENCHMARK.md`](BENCHMARK.md), and C/C++ consumers can use the
+generated header [`include/odxclient.h`](include/odxclient.h). See [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md) for the design and the
 [spec](odxproxy-dotnet-client-prompt.md) for the non-negotiable constraints.
 
 ## License
