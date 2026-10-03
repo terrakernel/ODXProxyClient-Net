@@ -22,8 +22,9 @@ use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 
 pub use call::{
-    OdxBuffer, OdxCallback, OdxRequest, odx_buffer_free, odx_cancel, odx_execute, odx_get_about,
-    odx_get_license, odx_get_metrics, odx_get_version, odx_request_free,
+    OdxBuffer, OdxCallback, OdxRequest, odx_buffer_free, odx_cancel, odx_execute, odx_execute_v2,
+    odx_get_about, odx_get_license, odx_get_metrics, odx_get_version, odx_get_version_v2,
+    odx_request_free,
 };
 pub use client::{ClientInner, OdxClientConfig, odx_client_create, odx_client_free};
 pub use status::OdxStatus;
@@ -519,5 +520,55 @@ mod tests {
         unsafe { odx_request_free(handle) };
         server.join().unwrap();
         unsafe { odx_client_free(client) };
+    }
+
+    type BodyEntry = unsafe extern "C" fn(
+        *mut ClientInner,
+        *const u8,
+        usize,
+        u32,
+        OdxCallback,
+        *mut c_void,
+        *mut *mut OdxRequest,
+    ) -> OdxStatus;
+
+    #[test]
+    fn v2_entry_points_route_post_to_v2_paths() {
+        let cases: [(BodyEntry, &str); 2] = [
+            (odx_execute_v2, "POST /v2/odoo/execute "),
+            (odx_get_version_v2, "POST /v2/odoo/version "),
+        ];
+        for (entry, expected) in cases {
+            let resp = br#"{"jsonrpc":"2.0","id":"v","result":true}"#.to_vec();
+            let (addr, req_line, server) = oneshot_server(resp.clone());
+            let client = client_for(addr);
+
+            let signal: Arc<Signal> = Arc::new((Mutex::new(None), Condvar::new()));
+            let body = br#"{"id":"v","url":"https://odoo.example"}"#;
+            let mut handle: *mut OdxRequest = std::ptr::null_mut();
+            let st = unsafe {
+                entry(
+                    client,
+                    body.as_ptr(),
+                    body.len(),
+                    0,
+                    capture_cb,
+                    Arc::as_ptr(&signal) as *mut c_void,
+                    &mut handle,
+                )
+            };
+            assert_eq!(st, OdxStatus::Ok);
+
+            let result = wait_result(&signal);
+            assert_eq!(result.status, OdxStatus::Ok);
+            assert_eq!(result.body, resp);
+
+            let line = req_line.lock().unwrap().clone().unwrap_or_default();
+            assert!(line.starts_with(expected), "expected {expected}, got: {line}");
+
+            unsafe { odx_request_free(handle) };
+            server.join().unwrap();
+            unsafe { odx_client_free(client) };
+        }
     }
 }

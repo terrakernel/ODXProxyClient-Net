@@ -1,6 +1,7 @@
 //! The RPC entry points. `odx_execute` (POST `/api/odoo/execute`) is the
-//! workhorse; `odx_get_version` (POST `/api/odoo/version`) and the GET endpoints
-//! (`/_/license`, `/_/about`, `/_/metrics`) all reuse the same non-blocking
+//! workhorse; `odx_get_version` (POST `/api/odoo/version`), their v2 (JSON-2)
+//! twins `odx_execute_v2` / `odx_get_version_v2` (POST `/v2/odoo/*`) and the GET
+//! endpoints (`/_/license`, `/_/about`, `/_/metrics`) all reuse the same non-blocking
 //! plumbing: submit → immediate request handle → completion callback from a tokio
 //! worker → zero-copy response handoff, with `oneshot` cancellation and the
 //! exactly-one-callback guarantee. See IMPLEMENTATION-PLAN.md §2.2, §4, §7.2.
@@ -121,6 +122,59 @@ pub unsafe extern "C" fn odx_get_version(
             user_data,
             out_request,
             "/api/odoo/version",
+        )
+    })
+}
+
+/// POST `/v2/odoo/execute` (JSON-2 upstream, Odoo 19+). Body is
+/// `{id, model_id, method, kwargs, odoo_instance{url, db, api_key}}`, built on the
+/// .NET side and passed through untouched. Same shape as `odx_execute`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn odx_execute_v2(
+    client: *mut ClientInner,
+    body_ptr: *const u8,
+    body_len: usize,
+    timeout_secs: u32,
+    callback: OdxCallback,
+    user_data: *mut c_void,
+    out_request: *mut *mut OdxRequest,
+) -> OdxStatus {
+    crate::ffi_guard(OdxStatus::ProxyInternal, || unsafe {
+        submit_with_body(
+            client,
+            body_ptr,
+            body_len,
+            timeout_secs,
+            callback,
+            user_data,
+            out_request,
+            "/v2/odoo/execute",
+        )
+    })
+}
+
+/// POST `/v2/odoo/version`. Body is `{id, url}`, as for `odx_get_version`; the
+/// result has the JSON-2 shape `{version_info, version}`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn odx_get_version_v2(
+    client: *mut ClientInner,
+    body_ptr: *const u8,
+    body_len: usize,
+    timeout_secs: u32,
+    callback: OdxCallback,
+    user_data: *mut c_void,
+    out_request: *mut *mut OdxRequest,
+) -> OdxStatus {
+    crate::ffi_guard(OdxStatus::ProxyInternal, || unsafe {
+        submit_with_body(
+            client,
+            body_ptr,
+            body_len,
+            timeout_secs,
+            callback,
+            user_data,
+            out_request,
+            "/v2/odoo/version",
         )
     })
 }

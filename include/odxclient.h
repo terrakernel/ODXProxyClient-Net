@@ -127,6 +127,27 @@ OdxStatus odx_get_version(struct ClientInner *client,
                           void *user_data,
                           struct OdxRequest **out_request);
 
+// POST `/v2/odoo/execute` (JSON-2 upstream, Odoo 19+). Body is
+// `{id, model_id, method, kwargs, odoo_instance{url, db, api_key}}`, built on the
+// .NET side and passed through untouched. Same shape as `odx_execute`.
+OdxStatus odx_execute_v2(struct ClientInner *client,
+                         const uint8_t *body_ptr,
+                         size_t body_len,
+                         uint32_t timeout_secs,
+                         OdxCallback callback,
+                         void *user_data,
+                         struct OdxRequest **out_request);
+
+// POST `/v2/odoo/version`. Body is `{id, url}`, as for `odx_get_version`; the
+// result has the JSON-2 shape `{version_info, version}`.
+OdxStatus odx_get_version_v2(struct ClientInner *client,
+                             const uint8_t *body_ptr,
+                             size_t body_len,
+                             uint32_t timeout_secs,
+                             OdxCallback callback,
+                             void *user_data,
+                             struct OdxRequest **out_request);
+
 // GET `/_/license`. Flat body `{licensee, valid_until, is_valid}` (NOT a JSON-RPC
 // envelope). Uses the client's default timeout.
 OdxStatus odx_get_license(struct ClientInner *client,
