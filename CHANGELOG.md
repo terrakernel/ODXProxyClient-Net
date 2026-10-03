@@ -2,7 +2,7 @@
 
 All notable changes to `TerraKernel.OdxClient`. Versions follow [SemVer](https://semver.org/).
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-10-03
 
 Adds ODXProxy's **v2 API** (`/v2/odoo/*`, Odoo's JSON-2, Odoo 19+). Additive: the v1 API is
 unchanged, and existing code compiles and behaves as before.
