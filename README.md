@@ -311,6 +311,80 @@ problem, not a version problem.
 
 ---
 
+## ODXBrain (optional: which model? which SOP?)
+
+ODXBrain is an optional retrieval sidecar behind the proxy. Ask it which Odoo model holds some data,
+or which SOP covers a task, and get ranked candidates back. It never contacts Odoo and needs **no
+Odoo credentials** (proxy key only), so it lives on the client: `client.Brain`. Needs odxproxy 0.10.0+
+with ODXBrain configured. Many proxies won't have it, and that's normal, not an outage.
+
+```csharp
+using var client = OdxClient.Create("https://proxy.example.com", proxyApiKey);
+var session = client.ForInstanceV2("https://erp.example.com", "prod", odooApiKey);
+
+if (await client.Brain.IsAvailableAsync())                  // reads /_/about features.odxbrain
+{
+    OdxBrainFacts facts = await session.GetBrainFactsAsync(); // {OdooVersion: "19.0", Edition: "enterprise"}, cached per URL
+
+    OdxBrainModelResult models = await client.Brain.ResolveModelAsync("which invoice is not paid yet", facts);
+    foreach (var c in models.Candidates)                     // every candidate, best first
+    {
+        JsonElement fields = await session.FieldsGetAsync(c.Model, MyJson.Default.JsonElement);
+        // ...
+    }
+
+    OdxBrainSopResult sop = await client.Brain.ResolveSopAsync(
+        "record a vendor bill from a purchase order", facts, installedModules: ["account", "purchase"]);
+    if (sop.IsNoMatch)
+    {
+        // match: "none". Ask the user; don't run the nearest SOP.
+    }
+}
+```
+
+| Method | Route |
+| --- | --- |
+| `Brain.ResolveModelAsync(query, facts?, k?, extra?)` → `OdxBrainModelResult` | `POST /brain/v1/resolve` |
+| `Brain.ResolveSopAsync(query, facts?, installedModules?, company?, k?, extra?)` → `OdxBrainSopResult` | `POST /brain/v1/sops/resolve` |
+| `Brain.GetInfoAsync()` → `JsonElement` (ODXBrain's `/info`) | `GET /brain/v1/info` |
+| `Brain.IsAvailableAsync()` → `bool` (missing `features` = `false`) | `GET /_/about` |
+| `Brain.GetFactsAsync(odooUrl)` (via v1) / `session.GetBrainFactsAsync()` (via v2) → `OdxBrainFacts` | `/v1` or `/v2` `odoo/version` |
+
+**Rules the library enforces for you:**
+
+- **Unset arguments are omitted, never sent as `null`, and facts are never guessed.** A missing
+  `odoo_version`/`edition` filters nothing; a wrong one silently drops correct answers. Use
+  `default` (no facts) rather than inventing a version.
+- **Results are not altered.** Every candidate comes back, in order. There is no `MinScore` and no
+  "best match" helper: ordering is the contract, the score scale isn't. Conditional fields
+  (`Excluded`, `Filtered`, `VersionUnaudited`, `Provisional`, and for SOPs `Match`, `FactsMissing`)
+  are information, not errors. `VersionUnaudited` holds the *newest audited* version (e.g. `"19.0"`
+  for a 20.0 instance), not the one you sent.
+- **Unknown fields survive.** Every result object has `AdditionalFields`, and `Raw` holds the whole
+  `result` exactly as received. `Model`, `Dim`, `CorpusVersion` and `Sops.Root` are kept so you can
+  detect a model or corpus swap.
+- **`extra`** (a JSON object) forwards fields this SDK doesn't know yet, unchanged.
+- SOP `Version` is opaque (a content hash): compare it, never parse it. Check the chosen SOP's
+  `Title` against the task before acting: embeddings match the topic, not the operation.
+
+**ODXBrain errors** (all derive from `OdxBrainException`; branch on `ErrorType` = `error.data.type`,
+never the message):
+
+| Exception | When | `IsRetryable` |
+| --- | --- | --- |
+| `OdxBrainNotInstalledException` | 501 / `-32008`, or a bare 404 from a proxy older than 0.10.0. Hide the feature. | no |
+| `OdxBrainUnavailableException` | 502 / `-32009` (unreachable) | **once** |
+| `OdxBrainUnavailableException` | 200 / `503`: up but that index isn't loaded (`corpus_unavailable` / `sops_unavailable`) | no |
+| `OdxBrainTimeoutException` | 504 / `-32010` | **once** |
+| `OdxBrainConfigException` | 502 / `-32011`: ODXBrain rejected the **proxy's** key. An operator problem; your key is fine. Deliberately *not* an `OdxAuthException`. | no |
+| `OdxBrainRequestException` | 200 / `400` (empty query, bad edition, `k < 1`, version below 14.0), or the proxy's plain-text 400/422 | no |
+| `OdxBrainException` | 200 / `500` (ODXBrain internal) or an unknown code | no |
+| `OdxAuthException` / `OdxLicenseException` | your proxy key (401) / the proxy's license (403), as everywhere else | no |
+
+On `/brain/*`, a positive `RpcCode` is **ODXBrain's** HTTP status, never Odoo's.
+
+---
+
 ## Error handling
 
 Failures throw a typed `OdxException`. Cancellation throws `OperationCanceledException`.
@@ -417,6 +491,11 @@ dotnet run --project dotnet/Odx.Client.V2Test/Odx.Client.V2Test.csproj -c Releas
 # v2 live integration test (real proxy + Odoo 19+). Keys come from env vars only;
 # see the header of dotnet/Odx.Client.V2LiveTest/Program.cs.
 dotnet run --project dotnet/Odx.Client.V2LiveTest/Odx.Client.V2LiveTest.csproj -c Release
+
+# ODXBrain: offline wire snapshots + error mapping (mock server); the live section runs only when
+# ODX_PROXY_URL / ODX_PROXY_API_KEY (+ optional ODX_PROXY_NOBRAIN_URL, ODX_PROXY_NOSOPS_URL,
+# ODOO_URL, ODOO_DB, ODOO_API_KEY) are set.
+dotnet run --project dotnet/Odx.Client.BrainTest/Odx.Client.BrainTest.csproj -c Release
 ```
 
 ## Status

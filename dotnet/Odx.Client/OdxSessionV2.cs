@@ -300,6 +300,16 @@ public sealed class OdxSessionV2
     public Task<bool> IsSupportedAsync(CancellationToken cancellationToken = default)
         => _client.SupportsV2Async(Url, cancellationToken);
 
+    /// <summary>
+    /// The ODXBrain facts for this session's Odoo, from <c>/v2/odoo/version</c>: <c>odoo_version</c> =
+    /// <c>"{version_info[0]}.{version_info[1]}"</c>, <c>edition</c> = <c>enterprise</c> iff
+    /// <c>version</c> contains <c>"+e"</c>. Cached per URL on the client. Pass the result to
+    /// <see cref="OdxBrain.ResolveModelAsync(string, OdxBrainFacts, int?, OdxJson, uint, CancellationToken)"/>
+    /// / <see cref="OdxBrain.ResolveSopAsync(string, OdxBrainFacts, IReadOnlyList{string}?, string?, int?, OdxJson, uint, CancellationToken)"/>.
+    /// </summary>
+    public Task<OdxBrainFacts> GetBrainFactsAsync(CancellationToken cancellationToken = default)
+        => _client.Brain.GetFactsV2Async(Url, cancellationToken);
+
     // ---- request assembly ----
 
     private async Task<T> SendNonNull<T>(string model, string method, Action<Utf8JsonWriter> writeArgs, OdxJson callContext,

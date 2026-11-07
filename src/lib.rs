@@ -22,7 +22,8 @@ use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 
 pub use call::{
-    OdxBuffer, OdxCallback, OdxRequest, odx_buffer_free, odx_cancel, odx_execute, odx_execute_v2,
+    OdxBuffer, OdxCallback, OdxRequest, odx_brain_info, odx_brain_resolve, odx_brain_sops_resolve,
+    odx_buffer_free, odx_cancel, odx_execute, odx_execute_v2,
     odx_get_about, odx_get_license, odx_get_metrics, odx_get_version, odx_get_version_v2,
     odx_request_free,
 };
@@ -570,5 +571,58 @@ mod tests {
             server.join().unwrap();
             unsafe { odx_client_free(client) };
         }
+    }
+
+    #[test]
+    fn brain_entry_points_route_to_brain_paths() {
+        let cases: [(BodyEntry, &str); 2] = [
+            (odx_brain_resolve, "POST /brain/v1/resolve "),
+            (odx_brain_sops_resolve, "POST /brain/v1/sops/resolve "),
+        ];
+        for (entry, expected) in cases {
+            let resp = br#"{"jsonrpc":"2.0","id":"b","result":{"candidates":[]}}"#.to_vec();
+            let (addr, req_line, server) = oneshot_server(resp.clone());
+            let client = client_for(addr);
+
+            let signal: Arc<Signal> = Arc::new((Mutex::new(None), Condvar::new()));
+            let body = br#"{"id":"b","query":"q"}"#;
+            let mut handle: *mut OdxRequest = std::ptr::null_mut();
+            let st = unsafe {
+                entry(
+                    client,
+                    body.as_ptr(),
+                    body.len(),
+                    0,
+                    capture_cb,
+                    Arc::as_ptr(&signal) as *mut c_void,
+                    &mut handle,
+                )
+            };
+            assert_eq!(st, OdxStatus::Ok);
+            let result = wait_result(&signal);
+            assert_eq!(result.body, resp);
+            let line = req_line.lock().unwrap().clone().unwrap_or_default();
+            assert!(line.starts_with(expected), "expected {expected}, got: {line}");
+            unsafe { odx_request_free(handle) };
+            server.join().unwrap();
+            unsafe { odx_client_free(client) };
+        }
+
+        // GET /brain/v1/info
+        let resp = br#"{"jsonrpc":"2.0","id":null,"result":{}}"#.to_vec();
+        let (addr, req_line, server) = oneshot_server(resp.clone());
+        let client = client_for(addr);
+        let signal: Arc<Signal> = Arc::new((Mutex::new(None), Condvar::new()));
+        let mut handle: *mut OdxRequest = std::ptr::null_mut();
+        let st = unsafe {
+            odx_brain_info(client, capture_cb, Arc::as_ptr(&signal) as *mut c_void, &mut handle)
+        };
+        assert_eq!(st, OdxStatus::Ok);
+        assert_eq!(wait_result(&signal).body, resp);
+        let line = req_line.lock().unwrap().clone().unwrap_or_default();
+        assert!(line.starts_with("GET /brain/v1/info "), "got: {line}");
+        unsafe { odx_request_free(handle) };
+        server.join().unwrap();
+        unsafe { odx_client_free(client) };
     }
 }

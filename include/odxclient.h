@@ -148,6 +148,33 @@ OdxStatus odx_get_version_v2(struct ClientInner *client,
                              void *user_data,
                              struct OdxRequest **out_request);
 
+// POST `/brain/v1/resolve` (ODXBrain: question → ranked Odoo model names). Body is
+// `{id, query, odoo_version?, edition?, k?, …extra}`, built on the .NET side and passed
+// through untouched. Proxy `x-api-key` only, no Odoo creds. Same shape as `odx_execute`.
+OdxStatus odx_brain_resolve(struct ClientInner *client,
+                            const uint8_t *body_ptr,
+                            size_t body_len,
+                            uint32_t timeout_secs,
+                            OdxCallback callback,
+                            void *user_data,
+                            struct OdxRequest **out_request);
+
+// POST `/brain/v1/sops/resolve` (ODXBrain: task → ranked SOP ids). Same body rules as
+// `odx_brain_resolve`, plus optional `installed_modules` / `company`.
+OdxStatus odx_brain_sops_resolve(struct ClientInner *client,
+                                 const uint8_t *body_ptr,
+                                 size_t body_len,
+                                 uint32_t timeout_secs,
+                                 OdxCallback callback,
+                                 void *user_data,
+                                 struct OdxRequest **out_request);
+
+// GET `/brain/v1/info` (ODXBrain pre-flight). JSON-RPC envelope with `id: null`.
+OdxStatus odx_brain_info(struct ClientInner *client,
+                         OdxCallback callback,
+                         void *user_data,
+                         struct OdxRequest **out_request);
+
 // GET `/_/license`. Flat body `{licensee, valid_until, is_valid}` (NOT a JSON-RPC
 // envelope). Uses the client's default timeout.
 OdxStatus odx_get_license(struct ClientInner *client,

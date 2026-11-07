@@ -18,7 +18,17 @@ public sealed class OdxClient : IDisposable
 {
     private readonly OdxClientHandle _handle;
 
-    private OdxClient(OdxClientHandle handle) => _handle = handle;
+    private OdxClient(OdxClientHandle handle)
+    {
+        _handle = handle;
+        Brain = new OdxBrain(this);
+    }
+
+    /// <summary>
+    /// ODXBrain (<c>/brain/v1/*</c>), the optional model/SOP retrieval sidecar. Proxy key only, no
+    /// Odoo credentials. Check <see cref="OdxBrain.IsAvailableAsync"/> first: many proxies don't run it.
+    /// </summary>
+    public OdxBrain Brain { get; }
 
     /// <summary>Create a client bound to an odxproxy base URL + API key.</summary>
     public static OdxClient Create(
@@ -288,9 +298,9 @@ public sealed class OdxClient : IDisposable
 
     // ---- submit plumbing ----
 
-    private enum Endpoint { Execute, Version, License, About, Metrics, ExecuteV2, VersionV2 }
+    internal enum Endpoint { Execute, Version, License, About, Metrics, ExecuteV2, VersionV2, BrainResolve, BrainSopsResolve, BrainInfo }
 
-    private unsafe Task<OdxResponse> SubmitWithBody(ReadOnlyMemory<byte> body, uint timeoutSecs, CancellationToken ct, Endpoint endpoint)
+    internal unsafe Task<OdxResponse> SubmitWithBody(ReadOnlyMemory<byte> body, uint timeoutSecs, CancellationToken ct, Endpoint endpoint)
     {
         var pc = new PendingCall();
         pc.Self = GCHandle.Alloc(pc);
@@ -310,6 +320,8 @@ public sealed class OdxClient : IDisposable
                     Endpoint.Version => NativeMethods.odx_get_version(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
                     Endpoint.ExecuteV2 => NativeMethods.odx_execute_v2(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
                     Endpoint.VersionV2 => NativeMethods.odx_get_version_v2(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                    Endpoint.BrainResolve => NativeMethods.odx_brain_resolve(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
+                    Endpoint.BrainSopsResolve => NativeMethods.odx_brain_sops_resolve(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
                     _ => NativeMethods.odx_execute(client, p, (nuint)body.Length, timeoutSecs, &OnComplete, userData, out req),
                 };
             }
@@ -322,7 +334,7 @@ public sealed class OdxClient : IDisposable
         return Complete(pc, status, req, ct);
     }
 
-    private unsafe Task<OdxResponse> SubmitGet(CancellationToken ct, Endpoint endpoint)
+    internal unsafe Task<OdxResponse> SubmitGet(CancellationToken ct, Endpoint endpoint)
     {
         var pc = new PendingCall();
         pc.Self = GCHandle.Alloc(pc);
@@ -339,6 +351,7 @@ public sealed class OdxClient : IDisposable
             {
                 Endpoint.License => NativeMethods.odx_get_license(client, &OnComplete, userData, out req),
                 Endpoint.About => NativeMethods.odx_get_about(client, &OnComplete, userData, out req),
+                Endpoint.BrainInfo => NativeMethods.odx_brain_info(client, &OnComplete, userData, out req),
                 _ => NativeMethods.odx_get_metrics(client, &OnComplete, userData, out req),
             };
         }

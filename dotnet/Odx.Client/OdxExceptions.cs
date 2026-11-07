@@ -194,3 +194,122 @@ public sealed class OdxOdooServerException : OdxOdooException
 {
     public OdxOdooServerException(long code, string? message, string? data) : base(code, message, data) { }
 }
+
+// ---- ODXBrain (/brain/v1/*) ----
+
+/// <summary>
+/// Base type for ODXBrain errors on <c>/brain/v1/*</c>. Thrown as-is for ODXBrain's internal
+/// error (code <c>500</c> on HTTP 200) and any code this SDK doesn't know. On an HTTP-200 error,
+/// <see cref="OdxException.RpcCode"/> is <b>ODXBrain's</b> HTTP status (not Odoo's), and
+/// <see cref="ErrorType"/> is the stable discriminant to branch on, never the message.
+/// The raw <c>error.data</c> is in <see cref="OdxException.RpcData"/>.
+/// </summary>
+public class OdxBrainException : OdxException
+{
+    private string? _errorType;
+    private bool _errorTypeRead;
+
+    public OdxBrainException(OdxStatus status, string? message, long? rpcCode, string? rpcData, bool isRetryable = false)
+        : base(status, message, rpcCode, rpcData)
+    {
+        IsRetryable = isRetryable;
+    }
+
+    /// <summary>
+    /// <c>error.data.type</c>: one of <c>invalid_request_error</c>, <c>model_mismatch</c>,
+    /// <c>unsupported_version</c>, <c>embedding_error</c>, <c>resolve_error</c>,
+    /// <c>corpus_unavailable</c>, <c>sops_unavailable</c>, <c>internal_error</c>,
+    /// <c>odxbrain_not_installed</c>; <see langword="null"/> when absent.
+    /// </summary>
+    public string? ErrorType
+    {
+        get
+        {
+            if (!_errorTypeRead)
+            {
+                _errorType = ReadDataString(RpcData, "type"u8);
+                _errorTypeRead = true;
+            }
+            return _errorType;
+        }
+    }
+
+    /// <summary>
+    /// True only when one retry may help: ODXBrain unreachable (<c>-32009</c>) or timed out
+    /// (<c>-32010</c>). The client never retries on its own; retry at most once.
+    /// </summary>
+    public bool IsRetryable { get; }
+
+    internal static string? ReadDataString(string? data, ReadOnlySpan<byte> key)
+    {
+        if (string.IsNullOrEmpty(data))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty(key, out JsonElement v)
+                && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+}
+
+/// <summary>
+/// ODXBrain is not installed on this proxy: HTTP 501 / <c>-32008</c>, or a bare 404 from a proxy
+/// older than 0.10.0. A normal, permanent state for that deployment, not an outage: hide the
+/// feature. Never retry. Check up front with <see cref="OdxBrain.IsAvailableAsync"/>.
+/// </summary>
+public sealed class OdxBrainNotInstalledException : OdxBrainException
+{
+    public OdxBrainNotInstalledException(OdxStatus status, string? message, long? rpcCode, string? rpcData)
+        : base(status, message, rpcCode, rpcData) { }
+}
+
+/// <summary>
+/// ODXBrain can't answer right now. Either it is installed but unreachable (HTTP 502 /
+/// <c>-32009</c>; <see cref="OdxBrainException.IsRetryable"/>, retry once), or it is up but lacks
+/// that index (code <c>503</c> on HTTP 200, <see cref="OdxBrainException.ErrorType"/>
+/// <c>corpus_unavailable</c> / <c>sops_unavailable</c>; not retryable).
+/// </summary>
+public sealed class OdxBrainUnavailableException : OdxBrainException
+{
+    public OdxBrainUnavailableException(OdxStatus status, string? message, long? rpcCode, string? rpcData, bool isRetryable)
+        : base(status, message, rpcCode, rpcData, isRetryable) { }
+}
+
+/// <summary>ODXBrain exceeded the hop timeout (HTTP 504 / <c>-32010</c>). Retry once.</summary>
+public sealed class OdxBrainTimeoutException : OdxBrainException
+{
+    public OdxBrainTimeoutException(OdxStatus status, string? message, long? rpcCode, string? rpcData)
+        : base(status, message, rpcCode, rpcData, isRetryable: true) { }
+}
+
+/// <summary>
+/// ODXBrain rejected the <b>proxy's</b> key (HTTP 502 / <c>-32011</c>): an operator
+/// misconfiguration. Your own proxy key was accepted, so this is deliberately <b>not</b> an
+/// <see cref="OdxAuthException"/>; don't rotate your key. Not retryable.
+/// </summary>
+public sealed class OdxBrainConfigException : OdxBrainException
+{
+    public OdxBrainConfigException(OdxStatus status, string? message, long? rpcCode, string? rpcData)
+        : base(status, message, rpcCode, rpcData) { }
+}
+
+/// <summary>
+/// The input was rejected. Usually ODXBrain's own <c>400</c> on HTTP 200 (empty query, bad
+/// <c>edition</c>, <c>k &lt; 1</c>, version below 14.0; see <see cref="OdxBrainException.ErrorType"/>).
+/// Also the proxy's plain-text HTTP 400/422 for a malformed body (no envelope, so
+/// <see cref="OdxException.RpcCode"/> is <see langword="null"/> and the text is the message).
+/// Not retryable.
+/// </summary>
+public sealed class OdxBrainRequestException : OdxBrainException
+{
+    public OdxBrainRequestException(OdxStatus status, string? message, long? rpcCode, string? rpcData)
+        : base(status, message, rpcCode, rpcData) { }
+}

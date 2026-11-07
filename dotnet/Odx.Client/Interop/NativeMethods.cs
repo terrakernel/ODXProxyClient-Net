@@ -79,6 +79,33 @@ internal static unsafe partial class NativeMethods
         out nint outRequest);
 
     [LibraryImport(Lib)]
+    internal static partial OdxStatus odx_brain_resolve(
+        nint client,
+        byte* bodyPtr,
+        nuint bodyLen,
+        uint timeoutSecs,
+        OdxCallbackFn callback,
+        nint userData,
+        out nint outRequest);
+
+    [LibraryImport(Lib)]
+    internal static partial OdxStatus odx_brain_sops_resolve(
+        nint client,
+        byte* bodyPtr,
+        nuint bodyLen,
+        uint timeoutSecs,
+        OdxCallbackFn callback,
+        nint userData,
+        out nint outRequest);
+
+    [LibraryImport(Lib)]
+    internal static partial OdxStatus odx_brain_info(
+        nint client,
+        OdxCallbackFn callback,
+        nint userData,
+        out nint outRequest);
+
+    [LibraryImport(Lib)]
     internal static partial OdxStatus odx_get_license(
         nint client,
         OdxCallbackFn callback,

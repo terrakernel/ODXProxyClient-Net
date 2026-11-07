@@ -1,6 +1,8 @@
 //! The RPC entry points. `odx_execute` (POST `/api/odoo/execute`) is the
 //! workhorse; `odx_get_version` (POST `/api/odoo/version`), their v2 (JSON-2)
-//! twins `odx_execute_v2` / `odx_get_version_v2` (POST `/v2/odoo/*`) and the GET
+//! twins `odx_execute_v2` / `odx_get_version_v2` (POST `/v2/odoo/*`), the ODXBrain
+//! routes `odx_brain_resolve` / `odx_brain_sops_resolve` / `odx_brain_info`
+//! (`/brain/v1/*`) and the GET
 //! endpoints (`/_/license`, `/_/about`, `/_/metrics`) all reuse the same non-blocking
 //! plumbing: submit → immediate request handle → completion callback from a tokio
 //! worker → zero-copy response handoff, with `oneshot` cancellation and the
@@ -176,6 +178,72 @@ pub unsafe extern "C" fn odx_get_version_v2(
             out_request,
             "/v2/odoo/version",
         )
+    })
+}
+
+/// POST `/brain/v1/resolve` (ODXBrain: question → ranked Odoo model names). Body is
+/// `{id, query, odoo_version?, edition?, k?, …extra}`, built on the .NET side and passed
+/// through untouched. Proxy `x-api-key` only, no Odoo creds. Same shape as `odx_execute`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn odx_brain_resolve(
+    client: *mut ClientInner,
+    body_ptr: *const u8,
+    body_len: usize,
+    timeout_secs: u32,
+    callback: OdxCallback,
+    user_data: *mut c_void,
+    out_request: *mut *mut OdxRequest,
+) -> OdxStatus {
+    crate::ffi_guard(OdxStatus::ProxyInternal, || unsafe {
+        submit_with_body(
+            client,
+            body_ptr,
+            body_len,
+            timeout_secs,
+            callback,
+            user_data,
+            out_request,
+            "/brain/v1/resolve",
+        )
+    })
+}
+
+/// POST `/brain/v1/sops/resolve` (ODXBrain: task → ranked SOP ids). Same body rules as
+/// `odx_brain_resolve`, plus optional `installed_modules` / `company`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn odx_brain_sops_resolve(
+    client: *mut ClientInner,
+    body_ptr: *const u8,
+    body_len: usize,
+    timeout_secs: u32,
+    callback: OdxCallback,
+    user_data: *mut c_void,
+    out_request: *mut *mut OdxRequest,
+) -> OdxStatus {
+    crate::ffi_guard(OdxStatus::ProxyInternal, || unsafe {
+        submit_with_body(
+            client,
+            body_ptr,
+            body_len,
+            timeout_secs,
+            callback,
+            user_data,
+            out_request,
+            "/brain/v1/sops/resolve",
+        )
+    })
+}
+
+/// GET `/brain/v1/info` (ODXBrain pre-flight). JSON-RPC envelope with `id: null`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn odx_brain_info(
+    client: *mut ClientInner,
+    callback: OdxCallback,
+    user_data: *mut c_void,
+    out_request: *mut *mut OdxRequest,
+) -> OdxStatus {
+    crate::ffi_guard(OdxStatus::ProxyInternal, || unsafe {
+        submit_get(client, callback, user_data, out_request, "/brain/v1/info")
     })
 }
 

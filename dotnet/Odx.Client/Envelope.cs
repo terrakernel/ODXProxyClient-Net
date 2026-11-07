@@ -16,7 +16,7 @@ internal static class Envelope
     /// Read a JSON-RPC envelope: throw the mapped exception if it carries an
     /// <c>error</c>, otherwise deserialize <c>result</c> into <typeparamref name="T"/>.
     /// </summary>
-    public static T? ReadResult<T>(ReadOnlySpan<byte> json, OdxStatus status, ushort http, JsonTypeInfo<T> resultType)
+    public static T? ReadResult<T>(ReadOnlySpan<byte> json, OdxStatus status, ushort http, JsonTypeInfo<T> resultType, bool brain = false)
     {
         var reader = new Utf8JsonReader(json);
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
@@ -39,7 +39,9 @@ internal static class Envelope
                 if (reader.TokenType == JsonTokenType.StartObject)
                 {
                     (long code, string? message, string? data) = ReadError(ref reader);
-                    throw MapError(status, http, code, message, data);
+                    throw brain
+                        ? MapBrainError(status, http, code, message, data)
+                        : MapError(status, http, code, message, data);
                 }
                 // error: null / false -> not actually an error
             }
@@ -62,6 +64,75 @@ internal static class Envelope
             throw MapError(status, http, null, "response had neither a result nor an error", null);
 
         return result;
+    }
+
+    /// <summary>
+    /// Read a <c>/brain/v1/*</c> response (SYSTEM_ARCHITECTURE.md §7.2). Non-envelope answers are
+    /// handled before any JSON parse: a bare 404 (proxy older than 0.10.0) is "not installed", and
+    /// the proxy's plain-text 400/422 (malformed body) is a request error carrying the text.
+    /// </summary>
+    public static T? ReadBrainResult<T>(ReadOnlySpan<byte> body, OdxStatus status, ushort http, JsonTypeInfo<T> resultType)
+    {
+        if (http == 404)
+            throw new OdxBrainNotInstalledException(status, "ODXBrain is not supported by this proxy (HTTP 404; proxy older than 0.10.0)", null, null);
+        if (http is 400 or 422)
+            throw new OdxBrainRequestException(status, PlainText(body, http), null, null);
+        if (body.Length == 0)
+            throw http == 501
+                ? new OdxBrainNotInstalledException(status, "ODXBrain is not installed on this proxy (HTTP 501)", null, null)
+                : MapError(status, http, null, null, null);
+        if (!LooksLikeJsonObject(body))
+            throw http == 501
+                ? new OdxBrainNotInstalledException(status, PlainText(body, http), null, null)
+                : MapError(status, http, null, PlainText(body, http), null);
+        return ReadResult(body, status, http, resultType, brain: true);
+    }
+
+    /// <summary>
+    /// Map a <c>/brain/*</c> error. Proxy codes (negative, and <c>0</c> on 403) keep their proxy
+    /// meaning; on HTTP 200 the code is <b>ODXBrain's</b> HTTP status, never Odoo's.
+    /// </summary>
+    public static OdxException MapBrainError(OdxStatus status, ushort http, long? rpcCode, string? message, string? data)
+    {
+        if (rpcCode == -32008 || http == 501)
+            return new OdxBrainNotInstalledException(status, message, rpcCode, data);
+        if (rpcCode == -32011)
+            return new OdxBrainConfigException(status, message, rpcCode, data);
+        if (rpcCode == -32009)
+            return new OdxBrainUnavailableException(status, message, rpcCode, data, isRetryable: true);
+        if (rpcCode == -32010)
+            return new OdxBrainTimeoutException(status, message, rpcCode, data);
+        return status switch
+        {
+            OdxStatus.Ok => rpcCode switch
+            {
+                400 => new OdxBrainRequestException(status, message, rpcCode, data),
+                503 => new OdxBrainUnavailableException(status, message, rpcCode, data, isRetryable: false),
+                _ => new OdxBrainException(status, message, rpcCode, data),
+            },
+            // An unexpected 502/504 on a brain route is still the brain hop.
+            OdxStatus.UpstreamConnect => new OdxBrainUnavailableException(status, message, rpcCode, data, isRetryable: true),
+            OdxStatus.UpstreamTimeout => new OdxBrainTimeoutException(status, message, rpcCode, data),
+            _ => MapError(status, http, rpcCode, message, data), // 401 auth, 403 license, transport, ...
+        };
+    }
+
+    private static bool LooksLikeJsonObject(ReadOnlySpan<byte> body)
+    {
+        foreach (byte b in body)
+        {
+            if (b is 0x20 or 0x09 or 0x0D or 0x0A) // JSON whitespace
+                continue;
+            return b == (byte)'{';
+        }
+        return false;
+    }
+
+    private static string PlainText(ReadOnlySpan<byte> body, ushort http)
+    {
+        const int Max = 512;
+        string text = System.Text.Encoding.UTF8.GetString(body.Length > Max ? body[..Max] : body).Trim();
+        return text.Length > 0 ? $"{text} (HTTP {http})" : $"HTTP {http}";
     }
 
     /// <summary>Deserialize a flat (non-envelope) body — <c>/_/license</c>, <c>/_/about</c>.</summary>

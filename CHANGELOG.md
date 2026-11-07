@@ -2,6 +2,32 @@
 
 All notable changes to `TerraKernel.OdxClient`. Versions follow [SemVer](https://semver.org/).
 
+## 1.2.0 — unreleased
+
+Adds **ODXBrain** (`/brain/v1/*`, odxproxy 0.10.0+), the optional model/SOP retrieval sidecar.
+Additive: v1 and v2 are unchanged.
+
+### Added
+
+- **`OdxClient.Brain`** (`OdxBrain`): `ResolveModelAsync(query, facts?, k?, extra?)`,
+  `ResolveSopAsync(query, facts?, installedModules?, company?, k?, extra?)`, `GetInfoAsync()`,
+  `IsAvailableAsync()` (reads `/_/about` `features.odxbrain`; missing = `false`), and
+  `GetFactsAsync(odooUrl)` (via v1 version). Raw-body overloads of both resolve calls.
+- `OdxSessionV2.GetBrainFactsAsync()` (via v2 version). Facts are cached per URL on the client.
+- `OdxBrainFacts` (`OdooVersion`, `Edition`). Unset facts are omitted from the request, never sent
+  as `null`.
+- Result types `OdxBrainModelResult` / `OdxBrainSopResult` (+ candidate, excluded and SOP-set
+  types). Every candidate is kept in order with no score filtering; conditional fields are exposed;
+  unknown fields are kept in `AdditionalFields`, and `Raw` holds the whole `result`.
+- Error types: `OdxBrainException` (base, with `ErrorType` = `error.data.type` and `IsRetryable`),
+  `OdxBrainNotInstalledException` (501 `-32008` or a bare 404), `OdxBrainUnavailableException`
+  (`-32009`, or `503` on HTTP 200), `OdxBrainTimeoutException` (`-32010`), `OdxBrainConfigException`
+  (`-32011`, deliberately not an auth error), `OdxBrainRequestException` (`400` on HTTP 200, or the
+  proxy's plain-text 400/422, which is not parsed as JSON-RPC).
+- Native core: `odx_brain_resolve`, `odx_brain_sops_resolve`, `odx_brain_info` exports (also in
+  `include/odxclient.h`).
+- `Odx.Client.BrainTest`: offline wire snapshots + error mapping, plus a live section gated on env vars.
+
 ## 1.1.0 — 2026-10-03
 
 Adds ODXProxy's **v2 API** (`/v2/odoo/*`, Odoo's JSON-2, Odoo 19+). Additive: the v1 API is
