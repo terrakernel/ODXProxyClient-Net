@@ -2,7 +2,7 @@
 
 All notable changes to `TerraKernel.OdxClient`. Versions follow [SemVer](https://semver.org/).
 
-## 1.2.0 — unreleased
+## 1.2.0 — 2026-11-07
 
 Adds **ODXBrain** (`/brain/v1/*`, odxproxy 0.10.0+), the optional model/SOP retrieval sidecar.
 Additive: v1 and v2 are unchanged.
