@@ -28,6 +28,13 @@ Additive: v1 and v2 are unchanged.
   `include/odxclient.h`).
 - `Odx.Client.BrainTest`: offline wire snapshots + error mapping, plus a live section gated on env vars.
 
+### Fixed
+
+- `GetAboutAsync<T>` now reads the envelope's `result`. `/_/about` has always returned a JSON-RPC
+  envelope (`{jsonrpc, id, result: {build, version, features?}}`), but this method deserialized the
+  whole body as a plain object, so `build`/`version` came back unset. `/_/license` is unchanged
+  (it really is a plain object).
+
 ## 1.1.0 — 2026-10-03
 
 Adds ODXProxy's **v2 API** (`/v2/odoo/*`, Odoo's JSON-2, Odoo 19+). Additive: the v1 API is

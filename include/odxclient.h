@@ -182,7 +182,7 @@ OdxStatus odx_get_license(struct ClientInner *client,
                           void *user_data,
                           struct OdxRequest **out_request);
 
-// GET `/_/about`. Body `{build, version}`.
+// GET `/_/about`. JSON-RPC envelope; `result` is `{build, version, features?}`.
 OdxStatus odx_get_about(struct ClientInner *client,
                         OdxCallback callback,
                         void *user_data,

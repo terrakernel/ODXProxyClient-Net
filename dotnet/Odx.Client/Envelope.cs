@@ -135,7 +135,7 @@ internal static class Envelope
         return text.Length > 0 ? $"{text} (HTTP {http})" : $"HTTP {http}";
     }
 
-    /// <summary>Deserialize a flat (non-envelope) body — <c>/_/license</c>, <c>/_/about</c>.</summary>
+    /// <summary>Deserialize a flat (non-envelope) body — <c>/_/license</c> only (<c>/_/about</c> is an envelope).</summary>
     public static T? ReadFlat<T>(ReadOnlySpan<byte> json, OdxStatus status, ushort http, JsonTypeInfo<T> type)
     {
         if (status != OdxStatus.Ok)

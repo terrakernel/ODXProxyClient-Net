@@ -17,7 +17,7 @@ await RunAsync("Cancellation delivers OperationCanceledException", CancelInFligh
 await RunAsync("GetAboutAsync routes GET /_/about", GetAboutRoute);
 await RunAsync("ExecuteAsync<T> deserializes result off-thread", TypedExecute);
 await RunAsync("HTTP 200 with error body throws OdxOdooException", OdooErrorOn200);
-await RunAsync("GetAboutAsync<T> deserializes flat body", TypedAbout);
+await RunAsync("GetAboutAsync<T> deserializes the envelope result", TypedAbout);
 RunSync("Many2One converter round-trips (read [id,name]/false, write bare id)", Many2OneRoundTrip);
 await RunAsync("ExecuteAsync (structured builder) writes a correct envelope", StructuredExecute);
 RunSync("OdxAction values serialize to their exact wire strings", OdxActionWireStrings);
@@ -192,7 +192,8 @@ async Task OdooErrorOn200()
 
 async Task TypedAbout()
 {
-    byte[] respBody = U8("""{"build":"b1","version":"0.1.0"}""");
+    // The real wire shape: /_/about has always been a JSON-RPC envelope.
+    byte[] respBody = U8("""{"jsonrpc":"2.0","id":"about","result":{"build":"b1","version":"0.1.0","features":{"odxbrain":true}}}""");
     var (port, server) = StartOneShotServer(respBody);
     using var client = OdxClient.Create($"http://127.0.0.1:{port}", "k", defaultTimeoutSecs: 5);
 

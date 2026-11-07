@@ -85,7 +85,7 @@ public sealed class OdxClient : IDisposable
     public Task<OdxResponse> GetLicenseAsync(CancellationToken cancellationToken = default)
         => SubmitGet(cancellationToken, Endpoint.License);
 
-    /// <summary>GET <c>/_/about</c>.</summary>
+    /// <summary>GET <c>/_/about</c> (a JSON-RPC envelope; <c>result</c> is <c>{build, version, features?}</c>).</summary>
     public Task<OdxResponse> GetAboutAsync(CancellationToken cancellationToken = default)
         => SubmitGet(cancellationToken, Endpoint.About);
 
@@ -122,11 +122,14 @@ public sealed class OdxClient : IDisposable
         return Envelope.ReadFlat(resp.Body, resp.Status, resp.HttpStatus, resultType);
     }
 
-    /// <summary>GET <c>/_/about</c> and deserialize the flat body into <typeparamref name="T"/>.</summary>
+    /// <summary>
+    /// GET <c>/_/about</c> and deserialize the envelope's <c>result</c>
+    /// (<c>{build, version, features?}</c>; <c>features</c> since proxy 0.10.0) into <typeparamref name="T"/>.
+    /// </summary>
     public async Task<T?> GetAboutAsync<T>(JsonTypeInfo<T> resultType, CancellationToken cancellationToken = default)
     {
         OdxResponse resp = await SubmitGet(cancellationToken, Endpoint.About).ConfigureAwait(false);
-        return Envelope.ReadFlat(resp.Body, resp.Status, resp.HttpStatus, resultType);
+        return ParseEnvelope(resp, resultType);
     }
 
     private static T? ParseEnvelope<T>(OdxResponse resp, JsonTypeInfo<T> resultType)

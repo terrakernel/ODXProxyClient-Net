@@ -261,7 +261,7 @@ pub unsafe extern "C" fn odx_get_license(
     })
 }
 
-/// GET `/_/about`. Body `{build, version}`.
+/// GET `/_/about`. JSON-RPC envelope; `result` is `{build, version, features?}`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn odx_get_about(
     client: *mut ClientInner,
